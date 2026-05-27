@@ -1,0 +1,11 @@
+{
+  "name": "sri-sapthagiri-system",
+  "version": "1.0.0",
+  "description": "Sri Sapthagiri Inventory Management System",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "mongoose": "^7.4.0"
+  }
+}

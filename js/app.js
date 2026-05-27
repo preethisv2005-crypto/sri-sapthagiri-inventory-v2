@@ -44,33 +44,46 @@ let connectionFailures = 0;
 async function checkServerConnection() {
     const statusEl = document.getElementById('connection-status');
     const textEl = statusEl?.querySelector('.status-text');
-    const updateStatus = (online) => {
-        if (online) {
-            connectionFailures = 0; // Reset on success
+    
+    const updateStatus = (status, message) => {
+        if (status === 'online') {
+            connectionFailures = 0;
             statusEl.className = 'status-indicator status-online';
-            if (textEl) textEl.textContent = 'Server Online';
+            if (textEl) textEl.textContent = message || 'Server Online';
+        } else if (status === 'warning') {
+            statusEl.className = 'status-indicator status-warning';
+            if (textEl) textEl.textContent = message || 'Database Error';
         } else {
             connectionFailures++;
-            // Only show offline if it fails 3 times in a row (30 seconds)
-            if (connectionFailures >= 3) {
+            if (connectionFailures >= 2) {
                 statusEl.className = 'status-indicator status-offline';
-                if (textEl) textEl.textContent = 'Server Offline';
+                if (textEl) textEl.textContent = message || 'Server Offline';
             }
         }
     };
+
     try {
         const res = await fetch(`${BASE_URL}/ping`);
         const contentType = res.headers.get('content-type');
-        if (res.ok && contentType && contentType.includes('application/json')) {
+        
+        if (contentType && contentType.includes('application/json')) {
             const data = await res.json();
-            updateStatus(data.status === 'ok');
+            if (res.ok && data.status === 'ok') {
+                updateStatus('online');
+            } else if (res.status === 503) {
+                updateStatus('warning', 'DB Connection Error');
+                console.warn('Backend reporting DB issue:', data.message);
+            } else {
+                updateStatus('offline', 'Server Error');
+            }
         } else {
-            throw new Error();
+            // Probably hit a Vercel 404/500 HTML page
+            updateStatus('offline', 'API Unreachable');
         }
     } catch (err) {
-        updateStatus(false);
+        updateStatus('offline');
     }
-    // Periodically re-check every 10 seconds
+
     if (!window._connectionInterval) {
         window._connectionInterval = setInterval(checkServerConnection, 10000);
     }

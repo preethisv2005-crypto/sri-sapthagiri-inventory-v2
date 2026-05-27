@@ -27,20 +27,26 @@ async function connectToDatabase() {
 
     connectionPromise = (async () => {
         console.log('📡 Connecting to MongoDB...');
+        if (!MONGO_URI || MONGO_URI.includes('localhost') && process.env.NODE_ENV === 'production') {
+            console.warn('⚠️ No production MongoDB URI provided!');
+        }
+
         try {
             await mongoose.connect(MONGO_URI, {
                 useNewUrlParser: true,
                 useUnifiedTopology: true,
                 dbName: 'sri_sapthagiri',
-                serverSelectionTimeoutMS: 10000,
+                serverSelectionTimeoutMS: 5000, // Reduced timeout for faster failure feedback
                 socketTimeoutMS: 45000,
             });
             console.log('✅ MongoDB Connected Successfully');
             await seedDatabase();
         } catch (err) {
             console.error(`❌ MongoDB Connection Failed: ${err.message}`);
-            if (process.env.NODE_ENV !== 'production') {
-                console.log('⚠️ Falling back to an in-memory MongoDB instance for local development...');
+            
+            // Local/Dev Fallback
+            if (process.env.NODE_ENV !== 'production' || !MONGO_URI) {
+                console.log('⚠️ Falling back to an in-memory MongoDB instance...');
                 try {
                     if (!MongoMemoryServer) {
                         ({ MongoMemoryServer } = require('mongodb-memory-server'));
@@ -53,20 +59,19 @@ async function connectToDatabase() {
                         useNewUrlParser: true,
                         useUnifiedTopology: true,
                         dbName: 'sri_sapthagiri',
-                        serverSelectionTimeoutMS: 10000,
-                        socketTimeoutMS: 45000,
+                        serverSelectionTimeoutMS: 5000,
                     });
                     console.log('✅ In-memory MongoDB instance started successfully');
                     await seedDatabase();
+                    return; // Success with fallback
                 } catch (memErr) {
                     console.error(`❌ In-memory MongoDB startup failed: ${memErr.message}`);
-                    connectionPromise = null; // Reset so we can try again
-                    throw memErr;
                 }
-            } else {
-                connectionPromise = null; // Reset so we can try again
-                throw err;
             }
+            
+            // If we get here, connection truly failed
+            connectionPromise = null; 
+            throw new Error(`Database Connection Error: ${err.message}`);
         }
     })();
 
@@ -74,14 +79,23 @@ async function connectToDatabase() {
 }
 
 // Ping endpoint for health check
-app.get('/api/ping', (req, res) => {
-    res.json({ status: 'ok' });
+app.get('/api/ping', async (req, res) => {
+    try {
+        await connectToDatabase();
+        res.json({ status: 'ok', database: 'connected' });
+    } catch (err) {
+        res.status(503).json({ status: 'error', message: 'Database Unavailable', details: err.message });
+    }
 });
 
 // Middleware to ensure DB is connected before handling requests
 app.use(async (req, res, next) => {
-    await connectToDatabase();
-    next();
+    try {
+        await connectToDatabase();
+        next();
+    } catch (err) {
+        res.status(503).json({ error: 'Database Connection Error', message: err.message });
+    }
 });
 
 

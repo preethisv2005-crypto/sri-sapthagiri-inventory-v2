@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: sapthagiri-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false  # Set manually in Render dashboard — your Atlas URI
+      - key: ADMIN_PASSWORD
+        sync: false  # Set manually in Render dashboard
+      - key: TRANSPORTER_PASSWORD
+        sync: false  # Set manually in Render dashboard
+    healthCheckPath: /api/health
+    autoDeploy: true

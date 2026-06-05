@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+
+# Environment files — NEVER commit real secrets
+.env
+backend/.env
+
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Legacy monolith files (replaced by frontend/ and backend/ structure)
+backend.js
+frontend.html
+app.js
+index.html
+styles.css

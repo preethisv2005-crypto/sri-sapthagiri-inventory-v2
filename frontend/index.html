@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sri Sapthagiri Logistics - Inventory System</title>
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- Backend API Base URL (update if backend is on different port) -->
+    <!-- jsPDF for Exporting (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+
+<body>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-wrapper">
+        <div class="login-card">
+            <div class="login-logo-container">
+                <div class="logo-badge">
+                    <svg class="logo-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+                        style="width: 24px; height: 24px;">
+                        <defs>
+                            <linearGradient id="logo-grad-login" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#2563eb" />
+                                <stop offset="100%" stop-color="#10b981" />
+                            </linearGradient>
+                        </defs>
+                        <path d="M2 18h20" stroke="url(#logo-grad-login)" stroke-width="1.5" stroke-opacity="0.4"
+                            stroke-linecap="round" />
+                        <path d="M3 18L8 9L13 18" stroke="url(#logo-grad-login)" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                        <path d="M8 18L13 6L18 18" stroke="url(#logo-grad-login)" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M13 18L17 10L21 18" stroke="url(#logo-grad-login)" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="8" cy="9" r="1.2" fill="#2563eb" />
+                        <circle cx="13" cy="6" r="1.2" fill="#10b981" />
+                        <circle cx="17" cy="10" r="1.2" fill="#10b981" />
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <div class="logo-title">
+                        <span class="logo-light" style="font-weight: 300; color: #475569;">Sri</span>
+                        <span class="logo-bold" style="font-weight: 700; color: #0f172a;">Sapthagiri</span>
+                    </div>
+                </div>
+            </div>
+            <div class="logo-subtitle">SYSTEMS</div>
+            <h1>Welcome Back</h1>
+            <p class="login-subtext">Access the Sri Sapthagiri Inventory Management System</p>
+
+            <div id="connection-status" class="status-indicator online">
+                <span class="status-dot"></span>
+                <span class="status-text">Server Online</span>
+            </div>
+
+            <div class="role-selector" id="roleSelector">
+                <button type="button" class="role-btn" id="btn-admin-login">
+                    <div class="role-info">
+                        <div class="role-icon">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                        <div class="role-text">
+                            <h3>Admin Access</h3>
+                            <p>Full control & approvals</p>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right chevron-icon"></i>
+                </button>
+
+                <button type="button" class="role-btn" id="btn-transporter-login">
+                    <div class="role-info">
+                        <div class="role-icon icon-green">
+                            <i class="fa-solid fa-truck"></i>
+                        </div>
+                        <div class="role-text">
+                            <h3>Transporter</h3>
+                            <p>Request stock movement</p>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right chevron-icon"></i>
+                </button>
+            </div>
+
+            <!-- Admin Password Entry (shown after clicking Admin) -->
+            <div id="admin-pass-panel" class="pass-panel" style="display:none; margin-top: 20px; text-align:left;">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label style="font-size:13px; display:block; margin-bottom:6px; font-weight:500;">Admin
+                        Password</label>
+                    <input type="password" id="admin-password-input" class="form-control"
+                        placeholder="Enter password..." autocomplete="off"
+                        style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); outline: none;">
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn-primary" id="btn-admin-confirm"
+                        style="flex:1; justify-content:center;">Login</button>
+                    <button type="button" class="btn-secondary" id="btn-admin-cancel"
+                        style="justify-content:center;">Cancel</button>
+                </div>
+                <div id="admin-login-error" style="color:var(--danger); font-size:12px; margin-top:8px; display:none;">❌
+                    Incorrect password. Try again.</div>
+            </div>
+
+            <!-- Transporter Password Entry (shown after clicking Transporter) -->
+            <div id="transporter-pass-panel" class="pass-panel"
+                style="display:none; margin-top: 20px; text-align:left;">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label style="font-size:13px; display:block; margin-bottom:6px; font-weight:500;">Transporter
+                        Password</label>
+                    <input type="password" id="transporter-password-input" class="form-control"
+                        placeholder="Enter password..." autocomplete="off"
+                        style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius); outline: none;">
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn-primary" id="btn-transporter-confirm"
+                        style="flex:1; justify-content:center; background-color: var(--success);">Login</button>
+                    <button type="button" class="btn-secondary" id="btn-transporter-cancel"
+                        style="justify-content:center;">Cancel</button>
+                </div>
+                <div id="transporter-login-error"
+                    style="color:var(--danger); font-size:12px; margin-top:8px; display:none;">❌ Incorrect password. Try
+                    again.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Layout -->
+    <div id="appLayout" class="app-container hidden">
+        <!-- Mobile Top Bar -->
+        <div class="mobile-top-bar">
+            <button id="mobileSidebarToggle" class="mobile-toggle-btn">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div class="mobile-logo-container">
+                <span class="logo-light">Sri</span>
+                <span class="logo-bold">Sapthagiri</span>
+            </div>
+            <div style="width: 30px;"></div> <!-- Spacer to center the logo text -->
+        </div>
+
+        <!-- Sidebar Overlay -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo-container">
+                <div class="logo-badge-sidebar">
+                    <svg class="logo-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+                        style="width: 20px; height: 20px;">
+                        <defs>
+                            <linearGradient id="logo-grad-sidebar" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#3b82f6" />
+                                <stop offset="100%" stop-color="#10b981" />
+                            </linearGradient>
+                        </defs>
+                        <path d="M2 18h20" stroke="url(#logo-grad-sidebar)" stroke-width="1.5" stroke-opacity="0.4"
+                            stroke-linecap="round" />
+                        <path d="M3 18L8 9L13 18" stroke="url(#logo-grad-sidebar)" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M8 18L13 6L18 18" stroke="url(#logo-grad-sidebar)" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M13 18L17 10L21 18" stroke="url(#logo-grad-sidebar)" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="8" cy="9" r="1.2" fill="#3b82f6" />
+                        <circle cx="13" cy="6" r="1.2" fill="#10b981" />
+                        <circle cx="17" cy="10" r="1.2" fill="#10b981" />
+                    </svg>
+                </div>
+                <div class="logo-text-sidebar">
+                    <div class="company-name-sidebar">
+                        <span class="logo-light">Sri</span>
+                        <span class="logo-bold">Sapthagiri</span>
+                    </div>
+                    <span class="system-name-sidebar">SYSTEMS</span>
+                </div>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-target="dashboardView"><i
+                        class="fa-solid fa-table-cells-large"></i> Dashboard</a>
+                <div class="nav-group">
+                    <a href="#" class="nav-item has-dropdown" id="pipesDropdownBtn">
+                        <i class="fa-solid fa-wrench"></i>
+                        Supreme
+                        <i class="fa-solid fa-chevron-down chevron"
+                            style="margin-left: auto; font-size: 0.8em; transition: transform 0.3s;"></i>
+                    </a>
+                    <div class="nav-submenu hidden" id="pipesSubmenu">
+                        <a href="#" class="nav-item" data-target="pipesView"
+                            style="padding-left: 2rem; font-size: 0.85rem;"><i class="fa-solid fa-droplet"></i>
+                            PIPES</a>
+                        <a href="#" class="nav-item" data-target="fittingsView"
+                            style="padding-left: 2rem; font-size: 0.85rem;"><i class="fa-solid fa-link"></i>
+                            FITTINGS</a>
+                    </div>
+                </div>
+                <a href="#" class="nav-item admin-only" data-target="motorsView">
+                    <i class="fa-solid fa-cog"></i>
+                    CRI (Motors)
+                </a>
+                <a href="#" class="nav-item" data-target="challansView"><i class="fa-solid fa-truck"></i> Transport
+                    Challans</a>
+                <a href="#" class="nav-item" data-target="logsView"><i class="fa-solid fa-file-lines"></i> Transaction
+                    Logs</a>
+                <a href="#" class="nav-item admin-only" data-target="internalTransactions"><i
+                        class="fa-solid fa-right-left"></i> Internal Transactions</a>
+                <a href="#" class="nav-item admin-only" data-target="reportsView"><i class="fa-solid fa-chart-line"></i>
+                    Reports</a>
+                <a href="#" class="nav-item admin-only" data-target="settingsView"><i class="fa-solid fa-sliders"></i>
+                    Data Retention</a>
+            </nav>
+            <div class="user-profile">
+                <div class="user-profile-header">
+                    <div class="avatar"><i class="fa-solid fa-user"></i></div>
+                    <div class="user-info">
+                        <span class="user-name" id="displayUsername">Admin</span>
+                        <span id="displayRole" style="display: none;"></span>
+                        <span class="user-status">ACTIVE SESSION</span>
+                    </div>
+                </div>
+                <button id="logoutBtn" class="sidebar-logout-btn"><i class="fa-solid fa-right-from-bracket"></i>
+                    Logout</button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+
+            <!-- Dashboard View -->
+            <section id="dashboardView" class="view-section active">
+                <header class="section-header" style="border-bottom: none; padding-bottom: 0; margin-bottom: 2rem;">
+                    <h2 style="font-size: 1.85rem; font-weight: 700; color: #0f172a;">Operational Dashboard</h2>
+                </header>
+
+                <div class="dashboard-stats-grid">
+                    <!-- Total Motor Units Card -->
+                    <div class="dashboard-stat-card">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                            <div class="stat-icon-wrapper blue">
+                                <i class="fa-solid fa-cog"></i>
+                            </div>
+                            <span class="dashboard-stat-badge blue">CRI</span>
+                        </div>
+                        <h3 class="stat-value" id="dashTotalMotors">0</h3>
+                        <span class="stat-label">Total Motor Units</span>
+                    </div>
+
+                    <!-- Total Pipe Units Card -->
+                    <div class="dashboard-stat-card">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                            <div class="stat-icon-wrapper orange">
+                                <i class="fa-solid fa-tint"></i>
+                            </div>
+                            <span class="dashboard-stat-badge orange">SUPREME</span>
+                        </div>
+                        <h3 class="stat-value" id="dashTotalPipes">0</h3>
+                        <span class="stat-label">Total Pipe Units</span>
+                    </div>
+
+                    <!-- Total Fitting Units Card -->
+                    <div class="dashboard-stat-card">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                            <div class="stat-icon-wrapper green">
+                                <i class="fa-solid fa-link"></i>
+                            </div>
+                            <span class="dashboard-stat-badge green">FITTINGS</span>
+                        </div>
+                        <h3 class="stat-value" id="dashTotalFittings">0</h3>
+                        <span class="stat-label">Total Fitting Units</span>
+                    </div>
+
+                    <!-- Critical Stock Alerts Card -->
+                    <div class="dashboard-stat-card alert-card">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                            <div class="stat-icon-wrapper red">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                        </div>
+                        <h3 class="stat-value text-red" id="dashCriticalAlerts">0</h3>
+                        <span class="stat-label">Critical Stock Alerts</span>
+                    </div>
+
+                    <!-- Dispatched Today Card -->
+                    <div class="dashboard-stat-card">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                            <div class="stat-icon-wrapper purple">
+                                <i class="fa-solid fa-truck"></i>
+                            </div>
+                        </div>
+                        <h3 class="stat-value" id="dashDispatchedToday">0</h3>
+                        <span class="stat-label">Dispatched Today</span>
+                    </div>
+                </div>
+
+                <!-- Serial Number Search Container -->
+                <div class="dashboard-search-container">
+                    <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                        <i class="fa-solid fa-magnifying-glass search-bar-icon"></i>
+                        <input type="text" id="serial-search-input" class="search-bar-input"
+                            placeholder="Search by Serial Number (e.g. SN-001)...">
+                        <button class="search-bar-button" id="btn-serial-search"><i
+                                class="fa-solid fa-magnifying-glass"></i> Find Unit</button>
+                    </div>
+                    <div id="serial-search-results" style="display: none; margin-top: 0.5rem; width: 100%;"></div>
+                </div>
+
+                <!-- 1. Recent Activity -->
+                <div class="dashboard-panel"
+                    style="margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow-sm); width: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+                        <span
+                            style="background-color: #3b82f6; color: white; border-radius: 9999px; padding: 0.35rem 0.85rem; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Logs</span>
+                        <h3
+                            style="font-size: 1.2rem; font-weight: 700; color: #0f172a; margin: 0; font-family: 'Inter', sans-serif;">
+                            Recent Activity</h3>
+                    </div>
+                    <div class="activity-list" id="recentActivityList" style="max-height: 250px; overflow-y: auto;">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- 2. Critical Stock Alerts -->
+                <div class="dashboard-panel alert-panel"
+                    style="margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow-sm); width: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+                        <span
+                            style="background-color: #ef4444; color: white; border-radius: 9999px; padding: 0.35rem 0.85rem; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Alerts</span>
+                        <h3
+                            style="font-size: 1.2rem; font-weight: 700; color: #0f172a; margin: 0; font-family: 'Inter', sans-serif;">
+                            Critical Stock Alerts</h3>
+                    </div>
+                    <div class="alert-list" id="lowStockAlertList" style="max-height: 250px; overflow-y: auto;">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- 3. Fitting Inventory Overview -->
+                <div class="dashboard-panel"
+                    style="margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow-sm); width: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+                        <span
+                            style="background-color: #0f976a; color: white; border-radius: 9999px; padding: 0.35rem 0.85rem; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Supreme
+                            Fittings</span>
+                        <h3
+                            style="font-size: 1.2rem; font-weight: 700; color: #0f172a; margin: 0; font-family: 'Inter', sans-serif;">
+                            Fitting Inventory Overview</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left;">PRODUCT NAME</th>
+                                    <th style="text-align: left;">MODEL / SPECS</th>
+                                    <th style="text-align: center;">STOCK LEVEL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashFittingOverviewBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 4. Pipe Inventory Overview -->
+                <div class="dashboard-panel"
+                    style="margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow-sm); width: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+                        <span
+                            style="background-color: #ea580c; color: white; border-radius: 9999px; padding: 0.35rem 0.85rem; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Supreme
+                            Pipes</span>
+                        <h3
+                            style="font-size: 1.2rem; font-weight: 700; color: #0f172a; margin: 0; font-family: 'Inter', sans-serif;">
+                            Pipe Inventory Overview</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left;">PRODUCT NAME</th>
+                                    <th style="text-align: left;">MODEL / SPECS</th>
+                                    <th style="text-align: center;">STOCK LEVEL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashPipeOverviewBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 5. Motor Inventory Overview -->
+                <div class="dashboard-panel"
+                    style="margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-card); border-radius: var(--radius); box-shadow: var(--shadow-sm); width: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+                        <span
+                            style="background-color: #2563eb; color: white; border-radius: 9999px; padding: 0.35rem 0.85rem; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">CRI
+                            Motors</span>
+                        <h3
+                            style="font-size: 1.2rem; font-weight: 700; color: #0f172a; margin: 0; font-family: 'Inter', sans-serif;">
+                            Motor Inventory Overview</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left;">PRODUCT NAME</th>
+                                    <th style="text-align: left;">MODEL / SPECS</th>
+                                    <th style="text-align: center;">STOCK LEVEL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dashMotorOverviewBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Hidden placeholders for backwards compatibility -->
+                <div style="display: none;">
+                    <div id="dashboardDate"></div>
+                    <div id="dashTotalItems"></div>
+                    <div id="dashLowStock"></div>
+                    <div id="dashPendingChallans"></div>
+                </div>
+            </section>
+
+            <!-- Pipes View -->
+            <section id="pipesView" class="view-section hidden">
+                <header class="section-header">
+                    <div>
+                        <h2 id="pipesViewTitle">Pipes Inventory</h2>
+                        <p class="subtitle">Slot-based table structure for size and pressure mapping</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn-outline admin-only" onclick="openManageCategoriesModal()"><i
+                                class="fa-solid fa-layer-group"></i> Manage Categories</button>
+                        <button class="btn-outline admin-only" onclick="openManageGodownsModal()"><i
+                                class="fa-solid fa-location-dot"></i> Manage Godowns</button>
+                        <button class="btn-outline admin-only" onclick="openEditColumnsModal()"><i
+                                class="fa-solid fa-pen"></i> Edit Columns</button>
+                        <button class="btn-primary" onclick="openModal('pipeModal')"><i class="fa-solid fa-plus"></i>
+                            ADD PIPES</button>
+                    </div>
+                </header>
+
+                <div class="pipe-types-tabs tabs" id="pipeTabsContainer"
+                    style="flex-wrap: wrap; margin-bottom: 1rem; gap: 0.5rem; justify-content: flex-start;">
+                    <!-- Populated by JS -->
+                </div>
+
+                <div class="card table-card">
+                    <div class="table-toolbar">
+                        <p class="info-text"><i class="fa-solid fa-circle-info"></i> Click on a cell to add stock.</p>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table excel-table" id="pipesTable">
+                            <thead>
+                                <tr id="pipesTableHeadRow">
+                                    <th>Pipe Size</th>
+                                    <th>4KG Stock</th>
+                                    <th>6KG Stock</th>
+                                    <th>10KG Stock</th>
+                                    <th>15KG Stock</th>
+                                    <th>Slotted Pipes</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pipesTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Fittings View -->
+            <section id="fittingsView" class="view-section hidden">
+                <header class="section-header">
+                    <div>
+                        <h2 id="fittingsViewTitle">Fittings Inventory</h2>
+                        <p class="subtitle">Manage fitting types and sizes</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn-outline admin-only" onclick="openManageFittingCategoriesModal()"><i
+                                class="fa-solid fa-layer-group"></i> Manage Categories</button>
+                        <button class="btn-outline admin-only" onclick="openManageGodownsModal()"><i
+                                class="fa-solid fa-location-dot"></i> Manage Godowns</button>
+                        <button class="btn-outline admin-only" onclick="openEditFittingColumnsModal()"><i
+                                class="fa-solid fa-pen"></i> Edit Sizes / Units</button>
+                        <button class="btn-primary" onclick="openModal('fittingModal')"><i class="fa-solid fa-plus"></i>
+                            ADD FITTING</button>
+                    </div>
+                </header>
+
+                <div class="pipe-types-tabs tabs" id="fittingTabsContainer"
+                    style="flex-wrap: wrap; margin-bottom: 1rem; gap: 0.5rem; justify-content: flex-start;">
+                    <!-- Populated by JS -->
+                </div>
+
+                <div class="card table-card">
+                    <div class="table-toolbar">
+                        <p class="info-text"><i class="fa-solid fa-circle-info"></i> Click on a cell to add stock.</p>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table excel-table" id="fittingsTable">
+                            <thead>
+                                <tr id="fittingsTableHeadRow">
+                                    <th>Item Name</th>
+                                    <!-- Sizes will go here -->
+                                </tr>
+                            </thead>
+                            <tbody id="fittingsTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Motors View -->
+            <section id="motorsView" class="view-section hidden">
+                <header class="section-header">
+                    <div>
+                        <h2 id="motorsViewTitle">Motors Inventory</h2>
+                        <p class="subtitle">Notebook-style serial tracking based on specifications</p>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <button class="btn-outline admin-only" onclick="openManageGodownsModal()"><i
+                                class="fa-solid fa-location-dot"></i> Manage Godowns</button>
+                        <button class="btn-primary admin-only" onclick="openModal('motorModal')"><i
+                                class="fa-solid fa-plus"></i> Create New Motor</button>
+                    </div>
+                </header>
+
+                <div class="motors-container" id="motorsList">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+
+            <!-- Delivery Challans View -->
+            <section id="challansView" class="view-section hidden">
+                <header class="section-header">
+                    <div>
+                        <h2>Transport Challans</h2>
+                    </div>
+                    <button class="btn-primary" onclick="openNewChallanModal()"><i class="fa-solid fa-plus"></i> New
+                        Challan</button>
+                </header>
+
+                <div class="card table-card">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="pendingChallans">Pending Approval</button>
+                        <button class="tab-btn" data-tab="approvedChallans">Approved / Dispatched</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>CHALLAN ID</th>
+                                    <th>DATE</th>
+                                    <th>ITEMS</th>
+                                    <th>SOURCE</th>
+                                    <th>DESTINATION</th>
+                                    <th>STATUS</th>
+                                    <th>ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="challansTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            </section>
+
+            <!-- Reports View -->
+            <section id="reportsView" class="view-section hidden">
+                <header class="section-header"
+                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 2rem;">
+                    <h2>Reports & Analytics</h2>
+                    <span style="color: var(--text-muted); font-size: 0.9rem;">Complete stock reports and detailed
+                        transport history.</span>
+                </header>
+
+                <div class="reports-grid-premium">
+                    <!-- Complete Stock Report Card -->
+                    <div class="report-card-premium">
+                        <div class="report-card-header">
+                            <div class="report-icon-box green">
+                                <i class="fa-solid fa-file-circle-check"></i>
+                            </div>
+                            <div>
+                                <h3>Complete Stock Report</h3>
+                                <p>View current stock quantities of all products categorized by category and
+                                    warehouse/godown storage locations.</p>
+                            </div>
+                        </div>
+                        <button class="btn-report-action green" onclick="openCompleteStockReport()"><i
+                                class="fa-solid fa-eye"></i> View Complete Stock Report</button>
+                    </div>
+
+                    <!-- Transport History Card -->
+                    <div class="report-card-premium">
+                        <div class="report-card-header">
+                            <div class="report-icon-box blue">
+                                <i class="fa-solid fa-truck"></i>
+                            </div>
+                            <div>
+                                <h3>Transport History</h3>
+                                <p>Detailed history of Inverts (Inbound stock coming in) and Outverts (Outbound stock
+                                    leaving) across your locations.</p>
+                            </div>
+                        </div>
+                        <button class="btn-report-action blue" onclick="openTransportHistoryReport()"><i
+                                class="fa-solid fa-clock-rotate-left"></i> Open Transport History</button>
+                    </div>
+                </div>
+
+                <!-- Dynamic Report View Area -->
+                <div id="reportContentArea" class="hidden" style="margin-top: 2rem;">
+                    <!-- Complete Stock Level Report -->
+                    <div id="stockReportSection" class="card table-card hidden">
+                        <div class="report-view-header">
+                            <h3 id="stockReportTitle">Complete Stock Level Report</h3>
+                            <div class="report-view-actions">
+                                <button class="btn-outline" onclick="printReport()"><i class="fa-solid fa-print"></i>
+                                    Print Report</button>
+                                <button class="btn-outline close-btn" onclick="closeReport()"><i
+                                        class="fa-solid fa-xmark"></i> Close</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left;">Category</th>
+                                        <th style="text-align: left;">Product Name</th>
+                                        <th style="text-align: left;">Model/Size</th>
+                                        <th style="text-align: left;">Location Breakdown</th>
+                                        <th style="text-align: right;">Total Stock</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stockReportTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Transport History Report -->
+                    <div id="transportHistorySection" class="card table-card hidden">
+                        <div class="report-view-header">
+                            <h3 id="transportReportTitle">Transport History Report</h3>
+                            <div class="report-view-actions">
+                                <button class="btn-outline" onclick="printReport()"><i class="fa-solid fa-print"></i>
+                                    Print Report</button>
+                                <button class="btn-outline close-btn" onclick="closeReport()"><i
+                                        class="fa-solid fa-xmark"></i> Close</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Challan No</th>
+                                        <th>Type</th>
+                                        <th>Party Name</th>
+                                        <th>Location/Godown</th>
+                                        <th>Items Summary</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transportReportTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Logs View -->
+            <section id="logsView" class="view-section hidden">
+                <header class="section-header">
+                    <div>
+                        <h2>Transaction History</h2>
+                        <p class="subtitle">Detailed logs of all delivery challans and system actions</p>
+                    </div>
+                </header>
+
+                <div class="card table-card">
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Challan No.</th>
+                                    <th>Date</th>
+                                    <th>Party Name</th>
+                                    <th>Type</th>
+                                    <th>Items Details</th>
+                                    <th>Status</th>
+                                    <th>Performed By</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logsTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings View (Data Retention) -->
+            <section id="settingsView" class="view-section hidden">
+                <header class="section-header">
+                    <div>
+                        <h2>Data Retention & System Settings</h2>
+                        <p class="subtitle">Configure automated database cleanups, perform manual pruning, and monitor audit logs</p>
+                    </div>
+                </header>
+
+                <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    <!-- Retention Settings Form Card -->
+                    <div class="card" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                        <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-dark); display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; margin-bottom: 0.25rem;">
+                            <i class="fa-solid fa-clock-rotate-left" style="color: var(--primary);"></i> Cleanup Policy Settings
+                        </h3>
+                        <form id="retentionSettingsForm" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                            <div>
+                                <label style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Pruning Option</label>
+                                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                    <label class="custom-checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600; color: var(--text-dark); font-size: 0.95rem;">
+                                        <input type="radio" name="retentionOption" value="permanent" checked style="display: none;" onchange="document.getElementById('retentionPeriodContainer').style.opacity = '0.5'; document.getElementById('retentionPeriodInput').disabled = true;">
+                                        <i class="fa-regular fa-circle" id="radioPermanentIcon" style="color: var(--primary); font-size: 1.2rem;"></i>
+                                        <span>Keep Data Permanently</span>
+                                    </label>
+                                    <label class="custom-checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600; color: var(--text-dark); font-size: 0.95rem;">
+                                        <input type="radio" name="retentionOption" value="auto-delete" style="display: none;" onchange="document.getElementById('retentionPeriodContainer').style.opacity = '1'; document.getElementById('retentionPeriodInput').disabled = false;">
+                                        <i class="fa-regular fa-circle" id="radioDeleteIcon" style="color: var(--text-muted); font-size: 1.2rem;"></i>
+                                        <span>Auto Delete After Retention Period</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div id="retentionPeriodContainer" style="opacity: 0.5; transition: opacity 0.2s;">
+                                <label for="retentionPeriodInput" style="display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Retention Period (Months)</label>
+                                <input type="number" id="retentionPeriodInput" name="retentionPeriod" value="24" min="1" max="120" disabled
+                                    style="width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 10px; outline: none; font-size: 0.95rem; color: var(--text-dark); transition: border-color 0.2s;"
+                                    onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'">
+                                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem; line-height: 1.3;">Default standard is 24 months (2 years). Old transactions, activity logs, and challans will be pruned automatically at midnight once the retention period ends.</p>
+                            </div>
+                            
+                            <button type="submit" class="btn-primary" style="align-self: flex-start; margin-top: 0.5rem;">
+                                <i class="fa-regular fa-floppy-disk"></i> Save Retention Policy
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Manual Cleanup Operations Card -->
+                    <div class="card" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                        <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-dark); display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; margin-bottom: 0.25rem;">
+                            <i class="fa-solid fa-trash-can" style="color: var(--danger);"></i> Manual Database Pruning
+                        </h3>
+                        <p style="font-size: 0.92rem; color: var(--text-muted); line-height: 1.5; margin: 0;">Administrators can manually trigger database cleanup of old records according to the retention period. Current active stock and product catalogs are kept safe.</p>
+                        
+                        <div style="background: rgba(241, 245, 249, 0.6); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: var(--text-muted);">
+                                <span>Configured Retention:</span>
+                                <span id="lblConfiguredRetention" style="color: var(--text-dark);">24 Months</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: var(--text-muted);">
+                                <span>Cleanup Cutoff Date:</span>
+                                <span id="lblCleanupCutoffDate" style="color: var(--text-dark);">-</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: var(--text-muted); border-top: 1px dashed var(--border); padding-top: 0.5rem; margin-top: 0.25rem;">
+                                <span>Total Prunable Records:</span>
+                                <span id="lblPrunableRecordsCount" style="color: var(--danger); font-weight: 700;">Calculating...</span>
+                            </div>
+                        </div>
+
+                        <button id="btnTriggerManualCleanup" class="btn-outline" style="align-self: flex-start; color: var(--danger); border-color: var(--danger); margin-top: 0.5rem;" onclick="checkAndTriggerCleanup()">
+                            <i class="fa-solid fa-broom"></i> Delete Old Records
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Audit Logs Section -->
+                <div class="card table-card">
+                    <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 1.25rem 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-dark); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                            <i class="fa-solid fa-clipboard-list" style="color: var(--primary);"></i> Audit Trail Logs
+                        </h3>
+                        <button class="btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="loadAuditLogs()"><i class="fa-solid fa-rotate"></i> Refresh Logs</button>
+                    </div>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 180px;">Timestamp</th>
+                                    <th style="width: 180px;">Action / Operation</th>
+                                    <th>Logged Details</th>
+                                    <th style="width: 140px; text-align: center;">Performed By</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditLogsTableBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODALS -->
+
+    <!-- Pipe Modal -->
+    <div class="modal-overlay" id="pipeModal">
+        <div class="modal-content premium-modal-content"
+            style="max-width: 500px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: none; padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">Add New Pipe Size</h3>
+                <button type="button" class="close-modal-btn" onclick="closeModal('pipeModal')"
+                    style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                <form id="pipeForm" style="display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 0;">
+                    <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Pipe
+                            Category</label>
+                        <select id="pipeTypeInput" required
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Pipe
+                            Size (e.g. 1/2", 3", 4")</label>
+                        <input type="text" id="pipeSizeInput" required
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                    </div>
+
+                    <div class="form-actions"
+                        style="display: flex; gap: 12px; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1.25rem;">
+                        <button type="button" class="btn-cancel" onclick="closeModal('pipeModal')"><i
+                                class="fa-solid fa-xmark"></i> Cancel</button>
+                        <button type="submit" class="btn-confirm"><i class="fa-solid fa-floppy-disk"></i> Create
+                            Pipe</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Columns Modal -->
+    <div class="modal-overlay" id="editColumnsModal">
+        <div class="modal-content"
+            style="max-width: 450px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: none; padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">Edit Pipe Dashboard Columns</h3>
+                <button class="close-modal-btn" onclick="closeModal('editColumnsModal')"
+                    style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Add New Column -->
+                <div>
+                    <label
+                        style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Add
+                        New Column</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="newColumnInputName" placeholder="e.g. 20KG"
+                            style="flex: 1; padding: 0.75rem 1rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                        <button type="button" onclick="addNewColumnItem()"
+                            style="background: #10b981; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#059669'"
+                            onmouseout="this.style.background='#10b981'">Add</button>
+                    </div>
+                </div>
+
+                <!-- Active Columns -->
+                <form id="editColumnsForm"
+                    style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 0;">
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem;">Active
+                            Columns</label>
+                        <div id="columnsEditList"
+                            style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-right: 0.25rem;">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 0.5rem;">
+                        <button type="button" onclick="closeModal('editColumnsModal')"
+                            style="flex: 1; background: #ef4444; color: white; border: none; padding: 0.75rem 1rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#dc2626'"
+                            onmouseout="this.style.background='#ef4444'">Cancel</button>
+                        <button type="submit"
+                            style="flex: 1.5; background: #3b82f6; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#2563eb'"
+                            onmouseout="this.style.background='#3b82f6'">Save Columns</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Categories Modal -->
+    <div class="modal-overlay" id="manageCategoriesModal">
+        <div class="modal-content"
+            style="max-width: 450px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: none; padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">Manage Pipe Categories</h3>
+                <button class="close-modal-btn" onclick="closeModal('manageCategoriesModal')"
+                    style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                <!-- Add New Category -->
+                <div>
+                    <label
+                        style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Add
+                        New Category</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="newPipeCategoryInputName" placeholder="e.g. HDPE pipes"
+                            style="flex: 1; padding: 0.75rem 1rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                        <button type="button" onclick="addNewPipeCategoryItem()"
+                            style="background: #10b981; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#059669'"
+                            onmouseout="this.style.background='#10b981'">Add</button>
+                    </div>
+                </div>
+
+                <p class="info-text" style="margin-bottom:0.5rem;"><i class="fa-solid fa-circle-info"></i> Rename
+                    categories. Note: Deleting a category removes ALL its pipe data.</p>
+                <form id="manageCategoriesForm"
+                    style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 0;">
+                    <div id="categoriesEditList"
+                        style="display:flex; flex-direction:column; gap:0.5rem; max-height: 200px; overflow-y: auto; padding-right: 0.25rem;">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 0.5rem;">
+                        <button type="button" class="btn-cancel" onclick="closeModal('manageCategoriesModal')"><i
+                                class="fa-solid fa-xmark"></i> Cancel</button>
+                        <button type="submit" class="btn-confirm" style="flex: 1.5;"><i
+                                class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fitting Modal -->
+    <div class="modal-overlay" id="fittingModal">
+        <div class="modal-content premium-modal-content"
+            style="max-width: 500px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: none; padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">Add New Fitting</h3>
+                <button type="button" class="close-modal-btn" onclick="closeModal('fittingModal')"
+                    style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                <form id="fittingForm" style="display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 0;">
+                    <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Fitting
+                            Category</label>
+                        <select id="fittingTypeInput" required
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Fitting
+                            Size</label>
+                        <input type="text" id="fittingNameInput" required placeholder="e.g. COUPLER, ELBOW"
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Low
+                            Stock Alert Limit <span class="text-orange">*</span></label>
+                        <input type="number" id="fittingLimit" required min="1" value="10"
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                    </div>
+
+                    <div class="form-actions"
+                        style="display: flex; gap: 12px; margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1.25rem;">
+                        <button type="button" class="btn-cancel" onclick="closeModal('fittingModal')"><i
+                                class="fa-solid fa-xmark"></i> Cancel</button>
+                        <button type="submit" class="btn-confirm"><i class="fa-solid fa-floppy-disk"></i> Save
+                            Fitting</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Fitting Columns Modal -->
+    <div class="modal-overlay" id="editFittingColumnsModal">
+        <div class="modal-content"
+            style="max-width: 450px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: none; padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">Edit Fitting Sizes / Units</h3>
+                <button class="close-modal-btn" onclick="closeModal('editFittingColumnsModal')"
+                    style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Add New Size -->
+                <div>
+                    <label
+                        style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Add
+                        New Size / Unit</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="newFittingColumnInputName" placeholder="e.g. 1 1/2&quot;"
+                            style="flex: 1; padding: 0.75rem 1rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                        <button type="button" onclick="addNewFittingColumnItem()"
+                            style="background: #10b981; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#059669'"
+                            onmouseout="this.style.background='#10b981'">Add</button>
+                    </div>
+                </div>
+
+                <!-- Active Sizes -->
+                <form id="editFittingColumnsForm"
+                    style="display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 0;">
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem;">Active
+                            Sizes / Units</label>
+                        <div id="fittingColumnsEditList"
+                            style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-right: 0.25rem;">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 0.5rem;">
+                        <button type="button" onclick="closeModal('editFittingColumnsModal')"
+                            style="flex: 1; background: #ef4444; color: white; border: none; padding: 0.75rem 1rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#dc2626'"
+                            onmouseout="this.style.background='#ef4444'">Cancel</button>
+                        <button type="submit"
+                            style="flex: 1.5; background: #3b82f6; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#2563eb'"
+                            onmouseout="this.style.background='#3b82f6'">Save Sizes / Units</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Fitting Categories Modal -->
+    <div class="modal-overlay" id="manageFittingCategoriesModal">
+        <div class="modal-content"
+            style="max-width: 450px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: none; padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">Manage Fitting Categories</h3>
+                <button class="close-modal-btn" onclick="closeModal('manageFittingCategoriesModal')"
+                    style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                <!-- Add New Category -->
+                <div>
+                    <label
+                        style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Add
+                        New Category</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="newFittingCategoryInputName" placeholder="e.g. PPR FITTINGS"
+                            style="flex: 1; padding: 0.75rem 1rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                        <button type="button" onclick="addNewFittingCategoryItem()"
+                            style="background: #10b981; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#059669'"
+                            onmouseout="this.style.background='#10b981'">Add</button>
+                    </div>
+                </div>
+
+                <p class="info-text" style="margin-bottom:0.5rem;"><i class="fa-solid fa-circle-info"></i> Rename
+                    categories. Note: Deleting a category removes ALL its fitting data.</p>
+                <form id="manageFittingCategoriesForm"
+                    style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 0;">
+                    <div id="fittingCategoriesEditList"
+                        style="display:flex; flex-direction:column; gap:0.5rem; max-height: 200px; overflow-y: auto; padding-right: 0.25rem;">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 0.5rem;">
+                        <button type="button" class="btn-cancel" onclick="closeModal('manageFittingCategoriesModal')"><i
+                                class="fa-solid fa-xmark"></i> Cancel</button>
+                        <button type="submit" class="btn-confirm" style="flex: 1.5;"><i
+                                class="fa-solid fa-floppy-disk"></i> Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Stock Modal -->
+    <div class="modal-overlay" id="addStockModal">
+        <div class="modal-content"
+            style="max-width: 450px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: none; padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
+                <h3 id="addStockModalTitle" style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">Add Stock</h3>
+                <button class="close-modal-btn" onclick="closeModal('addStockModal')"
+                    style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                <div
+                    style="background: #f8fafc; padding: 1rem; border-radius: 12px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Warehouse / Godown:</span>
+                        <span id="addStockGodown" style="font-size: 0.9rem; font-weight: 700; color: #0f172a;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Current Stock:</span>
+                        <span id="addStockCurrentValue"
+                            style="font-size: 0.9rem; font-weight: 700; color: #0f172a;">-</span>
+                    </div>
+                </div>
+
+                <form id="addStockForm" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 0;">
+                    <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Quantity
+                            (use '-' to subtract)</label>
+                        <input type="number" id="addStockQuantityInput" placeholder="e.g. 10 or -10" required
+                            style="width: 100%; padding: 0.75rem 1rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                    </div>
+
+                    <!-- Inline Error Alert Block -->
+                    <div id="addStockErrorBlock" class="alert-item critical"
+                        style="display: none; border-radius: 8px; margin-bottom: 0; border: 1px solid rgba(239, 68, 68, 0.2); border-left-width: 4px; padding: 0.75rem;">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 0.5rem;">
+                        <button type="button" class="btn-cancel" onclick="closeModal('addStockModal')"><i
+                                class="fa-solid fa-xmark"></i> Cancel</button>
+                        <button type="submit" class="btn-confirm" id="addStockSubmitBtn"><i
+                                class="fa-solid fa-plus"></i> Add Stock</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Motor Modal -->
+    <div class="modal-overlay" id="motorModal">
+        <div class="modal-content premium-modal-content">
+            <div class="modal-header">
+                <h3>Create New Motor Entry</h3>
+                <button type="button" class="close-modal-btn" onclick="closeModal('motorModal')"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="motorForm">
+                    <div class="form-group">
+                        <label>Motor Name <span class="text-orange">*</span></label>
+                        <input type="text" id="motorName" required placeholder="e.g. V4 Submersible, Monobloc">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Phase <span class="text-orange">*</span></label>
+                            <select id="motorPhase" required>
+                                <option value="Single Phase">Single Phase</option>
+                                <option value="Three Phase">Three Phase</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Motor Type <span class="text-orange">*</span></label>
+                            <input type="text" id="motorHp" required placeholder="e.g. 1.5">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div style="display:flex; align-items:center; width:100%;">
+                            <label style="margin-bottom:0;">Storage Location <span class="text-orange">*</span></label>
+                            <button type="button" class="manage-badge" id="btn-manage-locations">+ Manage</button>
+                        </div>
+                        <select id="motorGodown" required style="margin-top:0.4rem;">
+                            <option value="Main Godown">Main Godown</option>
+                            <option value="Shop">Shop</option>
+                            <option value="Godown 3">Godown 3</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Low Stock Alert Limit <span class="text-orange">*</span></label>
+                        <input type="number" id="motorLimit" required min="1" value="10">
+                    </div>
+
+                    <div class="form-actions" style="display:flex; gap:12px;">
+                        <button type="button" class="btn-cancel" onclick="closeModal('motorModal')"><i
+                                class="fa-solid fa-xmark"></i> Cancel</button>
+                        <button type="submit" class="btn-confirm"><i class="fa-solid fa-floppy-disk"></i> Create
+                            Motor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- Edit Motor Modal -->
+    <div class="modal-overlay" id="editMotorModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Motor Details</h3>
+                <button class="close-modal-btn" onclick="closeModal('editMotorModal')"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="editMotorForm">
+                    <input type="hidden" id="editMotorId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Motor Type</label>
+                            <input type="text" id="editMotorHp" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Phase</label>
+                            <select id="editMotorPhase" required>
+                                <option value="Single Phase">Single Phase</option>
+                                <option value="Three Phase">Three Phase</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Motor Name</label>
+                        <input type="text" id="editMotorType" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Move All Stock to Godown</label>
+                        <select id="editMotorGodown">
+                            <option value="">-- Do Not Change Godown --</option>
+                            <option value="Main Godown">Main Godown</option>
+                            <option value="Shop">Shop</option>
+                            <option value="Godown 3">Godown 3</option>
+                        </select>
+                        <small
+                            style="font-size:0.8em; color:var(--text-muted); display:block; margin-top:0.25rem;">Selecting
+                            a godown will move all existing serials for this motor to the chosen godown.</small>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary"
+                            onclick="closeModal('editMotorModal')">Cancel</button>
+                        <button type="submit" class="btn-primary">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Motor Add Serial Modal -->
+    <div class="modal-overlay" id="addSerialModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add Serial Numbers</h3>
+                <button class="close-modal-btn" onclick="closeModal('addSerialModal')"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="addSerialForm">
+                    <input type="hidden" id="targetMotorId">
+                    <div class="form-group">
+                        <label>Godown Name</label>
+                        <select id="newMotorGodown" required>
+                            <option value="Main Godown">Main Godown</option>
+                            <option value="Shop">Shop</option>
+                            <option value="Godown 3">Godown 3</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>New Serial Numbers (one per line)</label>
+                        <textarea id="newMotorSerials" rows="4" required></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary"
+                            onclick="closeModal('addSerialModal')">Cancel</button>
+                        <button type="submit" class="btn-primary">Add</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Godowns Modal -->
+    <div class="modal-overlay" id="manageGodownsModal">
+        <div class="modal-content"
+            style="max-width: 450px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: none; padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">Godown Locations</h3>
+                <button class="close-modal-btn" onclick="closeModal('manageGodownsModal')"
+                    style="width: 36px; height: 36px; border-radius: 50%; background: #f1f5f9; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Add New Location Form -->
+                <div>
+                    <label
+                        style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.5rem;">Add
+                        New Location</label>
+                    <form id="addGodownForm" style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="newGodownName" placeholder="e.g. West Godown" required
+                            style="flex: 1; padding: 0.75rem 1rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;"
+                            onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e2e8f0'">
+                        <button type="submit" class="btn-add-godown"
+                            style="background: #10b981; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; transition: background 0.2s;"
+                            onmouseover="this.style.background='#059669'"
+                            onmouseout="this.style.background='#10b981'">Add</button>
+                    </form>
+                </div>
+
+                <!-- Existing Locations -->
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <label
+                        style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem;">Existing
+                        Locations</label>
+                    <div id="godownsListContainer"
+                        style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; padding-right: 0.25rem;">
+                        <!-- Dynamically populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Done Button -->
+                <div style="display: flex; justify-content: center; margin-top: 0.5rem;">
+                    <button class="btn-done-godown" onclick="closeModal('manageGodownsModal')"
+                        style="background: #3b82f6; color: white; border: none; padding: 0.75rem 2rem; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: background 0.2s;"
+                        onmouseover="this.style.background='#2563eb'"
+                        onmouseout="this.style.background='#3b82f6'">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Challan Modal -->
+    <div class="modal-overlay" id="challanModal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>New Transportation Request</h3>
+                <button class="close-modal-btn" onclick="closeModal('challanModal')"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="challanForm">
+                    <datalist id="productsDatalist"></datalist>
+                    <div class="form-group">
+                        <!-- Labels Header -->
+                        <div style="display: flex; gap: 1rem; margin-bottom: 0.25rem; padding-right: 58px;">
+                            <div style="width: 180px;"><label
+                                    style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Category</label></div>
+                            <div style="flex: 1;"><label
+                                    style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Product</label></div>
+                            <div style="width: 80px;"><label
+                                    style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Qty</label></div>
+                        </div>
+
+                        <!-- Rows container -->
+                        <div id="challanItemsContainer"
+                            style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 250px; overflow-y: auto; margin-bottom: 0.5rem; padding-right: 4px;">
+                            <!-- Populated by JS -->
+                        </div>
+
+                        <button type="button" class="btn-add-another-product" onclick="addChallanItemRow()">
+                            <i class="fa-solid fa-circle-plus"></i> Add Another Product
+                        </button>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1.25rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Source Godown</label>
+                        <select id="challanSourceGodown" required style="margin-top: 0.4rem; width: 100%;">
+                            <!-- Populated dynamically by JS -->
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1.25rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Customer Name</label>
+                        <input type="text" id="challanCustomerName" placeholder="Enter customer name..." required
+                            style="margin-top: 0.4rem; width: 100%;">
+                    </div>
+
+                    <div class="form-actions" style="margin-top: 2rem; justify-content: flex-start; gap: 1rem;">
+                        <button type="button" class="btn-cancel-modal"
+                            onclick="closeModal('challanModal')">Cancel</button>
+                        <button type="submit" class="btn-submit-modal">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Approve Challan Modal -->
+    <div class="modal-overlay" id="approveChallanModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3>Approve Delivery Challan</h3>
+                <button class="close-modal-btn" onclick="closeModal('approveChallanModal')"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="approveChallanForm">
+                    <input type="hidden" id="approveChallanId">
+                    <p class="info-text" style="margin-bottom:1rem;"><i class="fa-solid fa-circle-info"></i> Please
+                        select the godown source for each item before approving.</p>
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th>Item Description</th>
+                                    <th style="width: 60px;">Qty</th>
+                                    <th>Source Godown</th>
+                                </tr>
+                            </thead>
+                            <tbody id="approveChallanItemsBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="form-actions" style="margin-top: 1.5rem;">
+                        <button type="button" class="btn-secondary"
+                            onclick="closeModal('approveChallanModal')">Cancel</button>
+                        <button type="submit" class="btn-primary">Confirm & Approve</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transport History Modal -->
+    <div class="modal-overlay" id="transportHistoryModal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3>Transport History</h3>
+                <button class="close-modal-btn" onclick="closeModal('transportHistoryModal')"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="tabs" style="margin-bottom: 1rem;">
+                    <button class="tab-btn active" id="tabInwardHistory"
+                        onclick="renderTransportHistory('Inward')">Inward History</button>
+                    <button class="tab-btn" id="tabOutwardHistory" onclick="renderTransportHistory('Outward')">Outward
+                        History</button>
+                </div>
+
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Challan No.</th>
+                                <th>Date</th>
+                                <th>Party Name</th>
+                                <th>Items Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transportHistoryBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="form-actions" style="margin-top: 1.5rem; justify-content: flex-start; gap: 1rem;">
+                    <button type="button" class="btn-outline" onclick="generateReport('challans', 'pdf')"><i
+                            class="fa-solid fa-file-pdf"></i> Export Current View (PDF)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Frontend Modules (order matters) -->
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/pipes.js"></script>
+    <script src="js/fittings.js"></script>
+    <script src="js/motors.js"></script>
+    <script src="js/challans.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

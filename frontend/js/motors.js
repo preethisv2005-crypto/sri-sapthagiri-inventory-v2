@@ -101,21 +101,36 @@ function renderMotors() {
 // ─── Modal Handlers ───────────────────────────────────────────────────────────
 
 window.openAddSerialModal = function (motorId) {
-    document.getElementById('addSerialMotorId').value = motorId;
-    document.getElementById('addSerialInput').value = '';
+    document.getElementById('targetMotorId').value = motorId;
+    document.getElementById('newMotorSerials').value = '';
+    
+    // Auto-populate godown from filter if possible
+    const godownSelect = document.getElementById('newMotorGodown');
+    if (godownSelect) {
+        if (currentGodownFilter !== 'all') {
+            godownSelect.value = currentGodownFilter;
+        } else {
+            godownSelect.value = state.godowns[0] || 'Main Godown';
+        }
+    }
+    
     openModal('addSerialModal');
-    setTimeout(() => document.getElementById('addSerialInput').focus(), 50);
+    setTimeout(() => document.getElementById('newMotorSerials').focus(), 50);
 };
 
 window.openEditMotorModal = function (motorId) {
     const motor = state.motors.find(m => (m._id || m.id) === motorId);
     if (!motor) return;
     document.getElementById('editMotorId').value = motorId;
-    document.getElementById('editMotorName').value = motor.type;
+    document.getElementById('editMotorType').value = motor.type;
     document.getElementById('editMotorHp').value = motor.hp;
     const phaseSelect = document.getElementById('editMotorPhase');
     if (phaseSelect) phaseSelect.value = motor.phase;
     document.getElementById('editMotorLimit').value = motor.lowStockLimit || 5;
+    
+    const godownSelect = document.getElementById('editMotorGodown');
+    if (godownSelect) godownSelect.value = ''; // Reset to default "Do not change"
+
     openModal('editMotorModal');
 };
 
@@ -125,21 +140,20 @@ window.removeSerial = function (motorId) {
 
     if (motor.serials.length === 0) { alert("No serials to remove."); return; }
 
-    const container = document.getElementById('motorsList');
-    const card = container.querySelector(`[data-motor-id="${motorId}"]`) || container.children[state.motors.indexOf(motor)];
-
-    const snToRemove = prompt("Enter the serial number to remove:");
+    const snToRemove = prompt(`Enter the serial number to remove from ${motor.type}:`);
     if (!snToRemove) return;
 
-    const exists = motor.serials.find(s => s.sn === snToRemove.trim());
-    if (!exists) { alert(`Serial "${snToRemove}" not found.`); return; }
+    const trimmedSn = snToRemove.trim();
+    const exists = motor.serials.find(s => s.sn === trimmedSn);
+    if (!exists) { alert(`Serial "${trimmedSn}" not found in this motor's inventory.`); return; }
 
-    if (confirm(`Remove serial "${snToRemove.trim()}" from ${motor.type}?`)) {
-        API.removeMotorSerial(motorId, snToRemove.trim()).then(updated => {
+    if (confirm(`Are you sure you want to remove serial "${trimmedSn}"?`)) {
+        API.removeMotorSerial(motorId, trimmedSn).then(updated => {
             const idx = state.motors.findIndex(m => (m._id || m.id) === motorId);
             if (idx !== -1) state.motors[idx] = updated;
             saveState();
             renderMotors();
+            showToast(`Serial ${trimmedSn} removed successfully.`);
         }).catch(err => alert('Error removing serial: ' + err.message));
     }
 };
@@ -152,6 +166,7 @@ document.getElementById('motorForm').addEventListener('submit', async (e) => {
     const phase = document.getElementById('motorPhase').value;
     const type = document.getElementById('motorName').value.trim();
     const limit = parseInt(document.getElementById('motorLimit').value, 10) || 10;
+    const godown = document.getElementById('motorGodown').value;
 
     try {
         const newMotor = await API.createMotor({ type, hp, phase, lowStockLimit: limit });
@@ -160,16 +175,17 @@ document.getElementById('motorForm').addEventListener('submit', async (e) => {
         renderMotors();
         closeModal('motorModal');
         e.target.reset();
+        showToast(`Motor Spec Created: ${type}`);
     } catch (err) {
-        alert(err.message);
+        alert('Error creating motor: ' + err.message);
     }
 });
 
 document.getElementById('addSerialForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const motorId = document.getElementById('addSerialMotorId').value;
-    const godown = document.getElementById('motorGodown').value;
-    const rawInput = document.getElementById('addSerialInput').value;
+    const motorId = document.getElementById('targetMotorId').value;
+    const godown = document.getElementById('newMotorGodown').value;
+    const rawInput = document.getElementById('newMotorSerials').value;
 
     const serials = rawInput.split(/[\n,]+/).map(s => s.trim()).filter(s => s.length > 0);
     if (serials.length === 0) { alert("Please enter at least one serial number."); return; }
@@ -182,6 +198,7 @@ document.getElementById('addSerialForm')?.addEventListener('submit', async (e) =
         renderMotors();
         closeModal('addSerialModal');
         e.target.reset();
+        showToast(`Successfully added ${serials.length} serials.`);
     } catch (err) {
         alert('Error adding serials: ' + err.message);
     }
@@ -190,18 +207,34 @@ document.getElementById('addSerialForm')?.addEventListener('submit', async (e) =
 document.getElementById('editMotorForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const motorId = document.getElementById('editMotorId').value;
-    const type = document.getElementById('editMotorName').value.trim();
+    const type = document.getElementById('editMotorType').value.trim();
     const hp = document.getElementById('editMotorHp').value.trim();
     const phase = document.getElementById('editMotorPhase').value;
     const limit = parseInt(document.getElementById('editMotorLimit').value, 10) || 5;
+    const targetGodown = document.getElementById('editMotorGodown').value;
+
+    const motor = state.motors.find(m => (m._id || m.id) === motorId);
+    if (!motor) return;
+
+    let updatedSerials = [...motor.serials];
+    if (targetGodown) {
+        updatedSerials = updatedSerials.map(s => ({ ...s, godown: targetGodown }));
+    }
 
     try {
-        const updatedMotor = await API.updateMotor(motorId, { type, hp, phase, lowStockLimit: limit });
+        const updatedMotor = await API.updateMotor(motorId, { 
+            type, 
+            hp, 
+            phase, 
+            lowStockLimit: limit,
+            serials: updatedSerials
+        });
         const idx = state.motors.findIndex(m => (m._id || m.id) === motorId);
         if (idx !== -1) state.motors[idx] = updatedMotor;
         saveState();
         renderMotors();
         closeModal('editMotorModal');
+        showToast('Motor specs updated successfully.');
     } catch (err) {
         alert('Error updating motor: ' + err.message);
     }
@@ -211,12 +244,13 @@ window.deleteMotor = function (id) {
     if (state.currentUser.role !== 'admin') { alert("Only admin users can delete motors."); return; }
     const motor = state.motors.find(m => (m._id || m.id) === id);
     if (!motor) return;
-    if (confirm(`Are you sure you want to delete the motor "${motor.hp} HP ${motor.type} (${motor.phase})" and all its serials?`)) {
+    if (confirm(`Are you sure you want to delete the motor spec "${motor.hp} HP ${motor.type} (${motor.phase})" and ALL its serial numbers?`)) {
         API.deleteMotorApi(id).then(() => {
             state.motors = state.motors.filter(m => (m._id || m.id) !== id);
             saveState();
             renderMotors();
             updateDashboard();
+            showToast('Motor spec deleted.');
         }).catch(err => alert('Error deleting motor: ' + err.message));
     }
 };

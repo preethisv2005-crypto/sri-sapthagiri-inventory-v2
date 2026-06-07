@@ -228,14 +228,33 @@ document.getElementById('fittingTypeInput')?.addEventListener('change', async (e
         const catName = prompt("Enter new Fitting Category Name (e.g. PPR FITTINGS):");
         if (catName && catName.trim() !== '') {
             const name = catName.trim().toUpperCase();
-            if (state.fittingSchemas[name]) { alert("Category already exists!"); e.target.value = currentFittingTypeTab; return; }
-            state.fittingSchemas[name] = ["1/2\""];
-            await API.saveSettings({ fittingSchemas: state.fittingSchemas }).catch(err => console.error(err));
-            saveState();
-            currentFittingTypeTab = name;
-            renderFittingTabs();
-            renderFittings();
-            e.target.value = name;
+            if (state.fittingSchemas[name]) {
+                alert("Category already exists!");
+                e.target.value = currentFittingTypeTab;
+                return;
+            }
+
+            try {
+                // 1. Update state
+                state.fittingSchemas[name] = ["1/2\""];
+                
+                // 2. Save to backend
+                await API.saveSettings({ fittingSchemas: state.fittingSchemas });
+                
+                // 3. Update UI
+                currentFittingTypeTab = name;
+                renderFittingTabs(); // This rebuilds the dropdown
+                
+                // 4. Select the new one in the dropdown
+                const select = document.getElementById('fittingTypeInput');
+                if (select) select.value = name;
+
+                saveState();
+                renderFittings();
+            } catch (err) {
+                alert("Error saving category: " + err.message);
+                e.target.value = currentFittingTypeTab;
+            }
         } else {
             e.target.value = currentFittingTypeTab;
         }

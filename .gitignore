@@ -18,9 +18,9 @@ backend/.env
 *.log
 npm-debug.log*
 
-# Legacy monolith files (replaced by frontend/ and backend/ structure)
-backend.js
-frontend.html
-app.js
-index.html
-styles.css
+# Legacy monolith files (root level only — replaced by frontend/ and backend/)
+/backend.js
+/frontend.html
+/app.js
+/index.html
+/styles.css

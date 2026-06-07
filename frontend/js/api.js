@@ -1,14 +1,32 @@
 /**
  * api.js - All API calls to the backend
- * Sri Sapthagiri Logistics Inventory System
- *
- * Base URL: http://localhost:5000/api
- * All requests include X-User-Role header for auth.
  */
 
-const API_BASE = window.location.hostname === 'localhost' 
-    ? 'http://localhost:3001/api' 
-    : 'https://sapthagiri-api.onrender.com/api';  // ← Update this after deploying backend on Render
+// ─── API Configuration ───────────────────────────────────────────────────────
+
+const getApiBase = () => {
+    // 1. Check for manual override in localStorage
+    const override = localStorage.getItem('SAPTHAGIRI_API_OVERRIDE');
+    if (override) return override;
+
+    const host = window.location.hostname;
+
+    // 2. If running on localhost, 127.0.0.1, or opening as a local file (null/empty host)
+    if (host === 'localhost' || host === '127.0.0.1' || !host) {
+        return 'http://127.0.0.1:3001/api';
+    }
+
+    // 3. If running on a local network IP (192.168.x.x)
+    if (/^192\.168\.\d+\.\d+$/.test(host)) {
+        return `http://${host}:3001/api`;
+    }
+
+    // 4. Default to production
+    return 'https://api.srisapthagirisystems.in/api';
+};
+
+const API_BASE = getApiBase();
+console.log(`🔌 API Base URL: ${API_BASE}`);
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 

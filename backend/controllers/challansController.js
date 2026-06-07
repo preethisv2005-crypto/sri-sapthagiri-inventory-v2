@@ -19,14 +19,31 @@ exports.createChallan = async (req, res) => {
             return res.status(400).json({ message: 'customer and items are required' });
         }
 
-        // Auto-generate Challan ID (CH-XXXX)
-        const lastChallan = await Challan.findOne({}).sort({ createdAt: -1 });
-        let nextNum = 1001;
-        if (lastChallan && lastChallan.challanId) {
-            const match = lastChallan.challanId.match(/CH-(\d+)/);
-            if (match) nextNum = parseInt(match[1], 10) + 1;
+        // Robust Challan ID Generation
+        let challanId = '';
+        let isUnique = false;
+        let attempts = 0;
+
+        while (!isUnique && attempts < 5) {
+            const lastChallan = await Challan.findOne({}).sort({ createdAt: -1 });
+            let nextNum = 1001;
+            
+            if (lastChallan && lastChallan.challanId) {
+                const match = lastChallan.challanId.match(/CH-(\d+)/);
+                if (match) nextNum = parseInt(match[1], 10) + 1;
+            }
+            
+            // Add offset for concurrent attempts
+            challanId = `CH-${nextNum + attempts}`;
+            
+            // Double check uniqueness
+            const existing = await Challan.findOne({ challanId });
+            if (!existing) {
+                isUnique = true;
+            } else {
+                attempts++;
+            }
         }
-        const challanId = `CH-${nextNum}`;
 
         const challan = new Challan({
             challanId,

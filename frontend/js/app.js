@@ -63,16 +63,23 @@ async function updateConnectionStatus() {
     const indicator = document.getElementById('connection-status');
     if (!indicator) return;
 
-    const isOnline = await API.checkServerHealth();
-    const dot = indicator.querySelector('.status-dot');
-    const text = indicator.querySelector('.status-text');
+    try {
+        const isOnline = await API.checkServerHealth();
+        const dot = indicator.querySelector('.status-dot');
+        const text = indicator.querySelector('.status-text');
 
-    if (isOnline) {
-        indicator.className = 'status-indicator online';
-        if (dot) dot.style.background = '#10b981';
-        if (text) text.textContent = 'Server Online';
-    } else {
+        if (isOnline) {
+            indicator.className = 'status-indicator online';
+            if (dot) dot.style.background = '#10b981';
+            if (text) text.textContent = 'Server Online';
+        } else {
+            throw new Error('Health check failed');
+        }
+    } catch (err) {
+        console.error('📡 Connection Check Failed:', err.message);
         indicator.className = 'status-indicator offline';
+        const dot = indicator.querySelector('.status-dot');
+        const text = indicator.querySelector('.status-text');
         if (dot) dot.style.background = '#ef4444';
         if (text) text.textContent = 'Server Offline';
     }
@@ -378,10 +385,10 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('DOMContentLoaded', () => {
     updateConnectionStatus();
+    // Check every 10 seconds instead of just once
+    setInterval(updateConnectionStatus, 10000);
     setupSerialSearch();
 });
-updateConnectionStatus();
-setupSerialSearch();
 
 // Mobile navigation sidebar toggler helper
 function initMobileNavigation() {

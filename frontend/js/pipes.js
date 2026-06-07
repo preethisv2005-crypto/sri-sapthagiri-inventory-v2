@@ -228,14 +228,33 @@ document.getElementById('pipeTypeInput')?.addEventListener('change', async (e) =
         const catName = prompt("Enter new Pipe Category Name (e.g. HDPE pipes):");
         if (catName && catName.trim() !== '') {
             const name = catName.trim();
-            if (state.pipeSchemas[name]) { alert("Category already exists!"); e.target.value = currentPipeTypeTab; return; }
-            state.pipeSchemas[name] = ["Stock"];
-            await API.saveSettings({ pipeSchemas: state.pipeSchemas }).catch(err => console.error(err));
-            saveState();
-            currentPipeTypeTab = name;
-            renderPipeTabs();
-            renderPipes();
-            e.target.value = name;
+            if (state.pipeSchemas[name]) {
+                alert("Category already exists!");
+                e.target.value = currentPipeTypeTab;
+                return;
+            }
+            
+            try {
+                // 1. Update state
+                state.pipeSchemas[name] = ["Stock"];
+                
+                // 2. Save to backend
+                await API.saveSettings({ pipeSchemas: state.pipeSchemas });
+                
+                // 3. Update UI
+                currentPipeTypeTab = name;
+                renderPipeTabs(); // This rebuilds the dropdown options
+                
+                // 4. Select the new one in the dropdown
+                const select = document.getElementById('pipeTypeInput');
+                if (select) select.value = name;
+                
+                saveState();
+                renderPipes();
+            } catch (err) {
+                alert("Error saving category: " + err.message);
+                e.target.value = currentPipeTypeTab;
+            }
         } else {
             e.target.value = currentPipeTypeTab;
         }

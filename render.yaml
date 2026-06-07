@@ -9,10 +9,11 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGO_URI
-        sync: false  # Set manually in Render dashboard — your Atlas URI
+        sync: false  # Set manually in Render dashboard — your Atlas URI with URL-encoded password and /sapthagiri_inventory database
       - key: ADMIN_PASSWORD
-        sync: false  # Set manually in Render dashboard
+        sync: false  # Set manually in Render dashboard — must match frontend/js/app.js
       - key: TRANSPORTER_PASSWORD
-        sync: false  # Set manually in Render dashboard
+        sync: false  # Set manually in Render dashboard — must match frontend/js/app.js
+      # PORT is automatically injected by Render — do NOT set it manually
     healthCheckPath: /api/health
     autoDeploy: true

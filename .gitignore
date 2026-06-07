@@ -9,6 +9,11 @@ backend/.env
 # macOS system files
 .DS_Store
 **/.DS_Store
+Thumbs.db
+
+# Build/Dist folders
+dist/
+build/
 
 # IDE files
 .vscode/

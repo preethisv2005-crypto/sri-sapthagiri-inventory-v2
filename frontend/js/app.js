@@ -292,7 +292,7 @@ document.querySelectorAll('.nav-item').forEach(link => {
 
         const target = e.currentTarget.getAttribute('data-target');
         if (target === 'internalTransactions') {
-            openNewChallanModal();
+            openNewChallanModal(true);
             return;
         }
         if (target === 'settingsView') {

@@ -18,9 +18,24 @@ document.querySelectorAll('#challansView .tab-btn').forEach(btn => {
 
 // ─── Challan Modal ────────────────────────────────────────────────────────────
 
-window.openNewChallanModal = function () {
+window.openNewChallanModal = function (isInternal = false) {
     document.getElementById('challanForm').reset();
     document.getElementById('challanItemsContainer').innerHTML = '';
+    
+    const label = document.getElementById('challanCustomerLabel');
+    const input = document.getElementById('challanCustomerName');
+    const typeInput = document.getElementById('challanType');
+    
+    if (label) {
+        label.textContent = isInternal ? 'Destination Godown' : 'Customer Name';
+    }
+    if (input) {
+        input.placeholder = isInternal ? 'Enter destination godown...' : 'Enter customer name...';
+    }
+    if (typeInput) {
+        typeInput.value = isInternal ? 'Internal' : 'Outward';
+    }
+
     populateGodownDropdowns();
     addChallanItemRow();
     openModal('challanModal');
@@ -230,7 +245,7 @@ window.printChallan = function (id) {
                 </div>
                 <div><span class="details-label">From:</span> ${ch.sourceGodown || 'Main Godown'}</div>
                 <div><span class="details-label">To:</span> ${ch.godown || ''}</div>
-                <div><span class="details-label">Customer:</span> ${ch.customer || 'Customer'}</div>
+                <div><span class="details-label">${ch.type === 'Internal' ? 'Destination' : 'Customer'}:</span> ${ch.customer || 'Customer'}</div>
             </div>
             <table>
                 <thead>
@@ -312,7 +327,12 @@ function renderChallans() {
             <td><div style="font-weight: 500; color: #334155;">${formattedDate}</div></td>
             <td>${itemsHtml}</td>
             <td><div style="font-weight: 600; color: #334155;">${ch.sourceGodown || 'Main Godown'}</div></td>
-            <td><div style="font-weight: 500; color: #334155;">${ch.customer || 'Customer'}</div></td>
+            <td>
+                <div style="font-size: 0.75rem; font-weight: 700; color: ${ch.type === 'Internal' ? '#8b5cf6' : '#64748b'}; text-transform: uppercase; margin-bottom: 0.2rem;">
+                    ${ch.type === 'Internal' ? 'Internal Transfer' : 'Customer'}
+                </div>
+                <div style="font-weight: 600; color: #334155;">${ch.customer || 'Customer'}</div>
+            </td>
             <td>
                 <span class="challan-status-pill ${ch.status}">
                     <i class="${ch.status === 'pending' ? 'fa-regular fa-clock' : (ch.status === 'approved' ? 'fa-regular fa-circle-check' : 'fa-regular fa-circle-xmark')}" style="margin-right: 0.35rem;"></i>
@@ -382,12 +402,13 @@ document.getElementById('challanForm').addEventListener('submit', async (e) => {
     if (hasEmptyProduct) { alert("Please select a product for all rows."); return; }
 
     try {
+        const type = document.getElementById('challanType').value;
         const newChallan = await API.createChallan({
             customer: document.getElementById('challanCustomerName').value.trim(),
             sourceGodown: document.getElementById('challanSourceGodown').value,
             items,
             createdBy: state.currentUser.username,
-            type: 'Outward',
+            type: type,
             date: new Date().toISOString().split('T')[0]
         });
         state.challans.unshift(newChallan);

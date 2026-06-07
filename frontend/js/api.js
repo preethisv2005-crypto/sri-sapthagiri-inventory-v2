@@ -21,8 +21,8 @@ const getApiBase = () => {
         return `http://${host}:3001/api`;
     }
 
-    // 4. Default to production
-    return 'https://api.srisapthagirisystems.in/api';
+    // 4. Default to production (Render)
+    return 'https://sri-sapthagiri-backend.onrender.com/api';
 };
 
 const API_BASE = getApiBase();

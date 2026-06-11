@@ -20,10 +20,10 @@ exports.createMotor = async (req, res) => {
         if (!type || !hp || !phase) {
             return res.status(400).json({ message: 'type, hp, and phase are required' });
         }
-        // Check for duplicate
+        // Check for duplicate (case-insensitive)
         const existing = await Motor.findOne({
-            type: type.toLowerCase(),
-            hp: hp.toLowerCase(),
+            type: { $regex: new RegExp(`^${type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            hp: { $regex: new RegExp(`^${hp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
             phase
         });
         if (existing) {
@@ -59,7 +59,7 @@ exports.updateMotor = async (req, res) => {
         // Log action
         await logActivity(
             'UPDATE_MOTOR',
-            `Updated specs/details for Motor: CRI ${motor.hp} HP (${motor.phase}).`,
+            `Updated specs/details for Motor: ${motor.type} ${motor.hp} HP (${motor.phase}).`,
             performedBy
         );
         
@@ -97,7 +97,7 @@ exports.addSerials = async (req, res) => {
         if (addedCount > 0) {
             await logActivity(
                 'ADD_MOTOR_SERIALS',
-                `Added ${addedCount} serials to Motor: CRI ${motor.hp} HP (${motor.phase}) at godown: ${godown || 'Main Godown'}.`,
+                `Added ${addedCount} serials to Motor: ${motor.type} ${motor.hp} HP (${motor.phase}) at godown: ${godown || 'Main Godown'}.`,
                 performedBy
             );
         }
@@ -123,7 +123,7 @@ exports.removeSerial = async (req, res) => {
         if (exists) {
             await logActivity(
                 'REMOVE_MOTOR_SERIAL',
-                `Removed serial ${req.params.sn} from Motor: CRI ${motor.hp} HP (${motor.phase}).`,
+                `Removed serial ${req.params.sn} from Motor: ${motor.type} ${motor.hp} HP (${motor.phase}).`,
                 performedBy
             );
         }
@@ -144,7 +144,7 @@ exports.deleteMotor = async (req, res) => {
         // Log action
         await logActivity(
             'DELETE_MOTOR',
-            `Deleted Motor spec: CRI ${motor.hp} HP (${motor.phase}).`,
+            `Deleted Motor spec: ${motor.type} ${motor.hp} HP (${motor.phase}).`,
             performedBy
         );
         

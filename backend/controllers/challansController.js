@@ -84,12 +84,18 @@ exports.updateChallan = async (req, res) => {
 
         // Audit Logging
         if (req.body.status) {
-            const actionType = req.body.status === 'approved' ? 'APPROVE_CHALLAN' : 'REJECT_CHALLAN';
-            await logActivity(
-                actionType,
-                `${actionType === 'APPROVE_CHALLAN' ? 'Approved' : 'Rejected'} Challan ${challan.challanId} (Party: ${challan.customer}).`,
-                performedBy
-            );
+            let actionType = 'UPDATE_CHALLAN_STATUS';
+            let description = `Updated Challan ${challan.challanId} status to ${req.body.status}.`;
+            
+            if (req.body.status === 'approved') {
+                actionType = 'APPROVE_CHALLAN';
+                description = `Approved Challan ${challan.challanId} (Party: ${challan.customer}).`;
+            } else if (req.body.status === 'rejected') {
+                actionType = 'REJECT_CHALLAN';
+                description = `Rejected Challan ${challan.challanId} (Party: ${challan.customer}).`;
+            }
+            
+            await logActivity(actionType, description, performedBy);
         } else {
             await logActivity(
                 'UPDATE_CHALLAN',

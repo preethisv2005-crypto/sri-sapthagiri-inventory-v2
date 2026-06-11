@@ -5,9 +5,6 @@ const helmet  = require('helmet');
 const morgan  = require('morgan');
 const connectDB = require('./config/db');
 
-// --- Connect to MongoDB ---
-connectDB();
-
 const app = express();
 
 // --- Security Headers ---
@@ -24,7 +21,8 @@ const allowedOrigins = [
     // Production domains
     'https://srisapthagirisystems.in',
     'https://www.srisapthagirisystems.in',
-    'https://app.srisapthagirisystems.in',
+    'https://app.srisapthagirisystems.in',      // ← Inventory app subdomain (Vercel)
+    // Alternate spellings (without trailing 's')
     'https://srisapthagirisystem.in',
     'https://www.srisapthagirisystem.in',
     'https://app.srisapthagirisystem.in',
@@ -33,7 +31,7 @@ const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:5173',
-    'http://127.0.0.1:5500',
+    'http://127.0.0.1:5500',  // VS Code Live Server
     'http://127.0.0.1:5501',
     'http://127.0.0.1:3000',
 ];
@@ -45,15 +43,14 @@ app.use(cors({
             return callback(null, true);
         }
 
-        // Production logic
+        // Allow requests with no origin (curl, Postman, mobile apps)
         if (!origin) return callback(null, true);
-        
-        const isVercel = /\.vercel\.app$/.test(origin);
-        const isWhitelisted = allowedOrigins.includes(origin);
 
-        if (isVercel || isWhitelisted) {
-            return callback(null, true);
-        }
+        // Allow any Vercel preview deployment
+        if (/\.vercel\.app$/.test(origin)) return callback(null, true);
+
+        // Allow listed origins
+        if (allowedOrigins.includes(origin)) return callback(null, true);
         
         console.warn(`[CORS] Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS: ' + origin));
@@ -104,13 +101,24 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: 'Internal Server Error', error: process.env.NODE_ENV === 'production' ? 'An error occurred' : err.message });
 });
 
-// --- Start Server ---
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`🚀 Sri Sapthagiri Backend running on port ${PORT}`);
-    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`❤️  Health Check: /api/health`);
-});
+// --- Connect to MongoDB and Start Server ---
+const startServer = async () => {
+    try {
+        await connectDB();
+        
+        const PORT = process.env.PORT || 3001;
+        app.listen(PORT, () => {
+            console.log(`🚀 Sri Sapthagiri Backend running on port ${PORT}`);
+            console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`❤️  Health Check: /api/health`);
+        });
+    } catch (err) {
+        console.error('❌ Failed to start server:', err.message);
+        process.exit(1);
+    }
+};
+
+startServer();
 
 // --- Background Data Retention Scheduler ---
 const Settings = require('./models/Settings');

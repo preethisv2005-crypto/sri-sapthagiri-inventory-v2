@@ -10,7 +10,7 @@ const connectDB = async (retryCount = 5) => {
 
     try {
         const conn = await mongoose.connect(uri, {
-            serverSelectionTimeoutMS: 10000, 
+            serverSelectionTimeoutMS: 10000, // Fail fast if Atlas unreachable
             socketTimeoutMS: 45000,
             family: 4 // Force IPv4 to avoid potential local DNS issues
         });

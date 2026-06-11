@@ -21,6 +21,15 @@ exports.createPipe = async (req, res) => {
         if (!type || !size) {
             return res.status(400).json({ message: 'type and size are required' });
         }
+
+        // Check for duplicate (case-insensitive)
+        const existing = await Pipe.findOne({
+            type: { $regex: new RegExp(`^${type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            size: { $regex: new RegExp(`^${size.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        });
+        if (existing) {
+            return res.status(409).json({ message: 'This pipe specification already exists.' });
+        }
         
         const pipe = new Pipe({ type, size, stock: stock || {}, lowStockLimit });
         await pipe.save();

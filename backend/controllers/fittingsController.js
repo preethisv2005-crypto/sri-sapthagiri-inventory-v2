@@ -20,6 +20,15 @@ exports.createFitting = async (req, res) => {
         if (!type || !name) {
             return res.status(400).json({ message: 'type and name are required' });
         }
+
+        // Check for duplicate (case-insensitive)
+        const existing = await Fitting.findOne({
+            type: { $regex: new RegExp(`^${type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+            name: { $regex: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        });
+        if (existing) {
+            return res.status(409).json({ message: 'This fitting already exists.' });
+        }
         
         const fitting = new Fitting({ type, name: name.toUpperCase(), stock: stock || {}, lowStockLimit });
         await fitting.save();

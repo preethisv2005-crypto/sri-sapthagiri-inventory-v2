@@ -26,7 +26,7 @@ function renderMotors() {
 
         let locationsHtml = '';
         activeGodowns.forEach(g => {
-            const sns = motor.serials.filter(item => item.godown === g).map(item => item.sn);
+            const sns = motor.serials.filter(item => item.godown === g && (!item.status || item.status === 'Available')).map(item => item.sn);
             const qty = sns.length;
 
             let serialsBoxHtml = '';
@@ -61,8 +61,8 @@ function renderMotors() {
         });
 
         const activeSerials = currentGodownFilter === 'all'
-            ? motor.serials
-            : motor.serials.filter(item => item.godown === currentGodownFilter);
+            ? motor.serials.filter(item => !item.status || item.status === 'Available')
+            : motor.serials.filter(item => item.godown === currentGodownFilter && (!item.status || item.status === 'Available'));
         const totalQty = activeSerials.length;
 
         card.innerHTML = `
@@ -76,7 +76,7 @@ function renderMotors() {
                         Type: ${motor.hp} | Phase: ${motor.phase}
                     </div>
                 </div>
-                <div class="motor-card-qty" style="font-weight: 700; color: #0f172a; font-size: 1rem;">Total Qty: ${totalQty}</div>
+                <div class="motor-card-qty" style="font-weight: 700; color: #0f172a; font-size: 1rem;">Total: ${totalQty} ${motor.unit || "NO'S"}</div>
             </div>
             <div class="motor-card-body" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1.5rem;">
                 <div class="motor-card-locations" style="flex: 1;">
@@ -167,9 +167,10 @@ document.getElementById('motorForm').addEventListener('submit', async (e) => {
     const type = document.getElementById('motorName').value.trim();
     const limit = parseInt(document.getElementById('motorLimit').value, 10) || 10;
     const godown = document.getElementById('motorGodown').value;
+    const unit = document.getElementById('motorUnit').value;
 
     try {
-        const newMotor = await API.createMotor({ type, hp, phase, lowStockLimit: limit });
+        const newMotor = await API.createMotor({ type, hp, phase, lowStockLimit: limit, unit });
         state.motors.push(newMotor);
         saveState();
         renderMotors();

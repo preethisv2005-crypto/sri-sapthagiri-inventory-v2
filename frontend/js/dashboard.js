@@ -18,12 +18,17 @@ function updateDashboard() {
     state.pipes.forEach(p => {
         if (p.stock) {
             Object.keys(p.stock).forEach(g => {
+                if (currentGodownFilter !== 'all' && g !== currentGodownFilter) return;
                 const godownStock = p.stock[g] || {};
                 Object.entries(godownStock).forEach(([col, val]) => {
                     totalPipes += val;
-                    if (val < 20) {
+                    const limit = (p.lowStockLimits && p.lowStockLimits[col] !== undefined)
+                        ? p.lowStockLimits[col]
+                        : (p.lowStockLimit !== undefined ? p.lowStockLimit : 20);
+                    if (val < limit) {
                         lowStockCount++;
-                        lowStockAlerts.push(`Pipe ${p.type} ${p.size} (${g} - ${col}) is low: ${val}`);
+                        const unit = p.unit || "NO'S";
+                        lowStockAlerts.push(`Pipe ${p.type} ${p.size} (${g} - ${col}) is low: ${val} ${unit}`);
                     }
                 });
             });
@@ -31,24 +36,34 @@ function updateDashboard() {
     });
 
     state.motors.forEach(m => {
-        totalMotors += m.serials.length;
+        const activeSerials = currentGodownFilter === 'all'
+            ? m.serials
+            : m.serials.filter(s => s.godown && s.godown.toLowerCase() === currentGodownFilter.toLowerCase());
+        const count = activeSerials.length;
+        totalMotors += count;
         const limit = m.lowStockLimit !== undefined ? m.lowStockLimit : 5;
-        if (m.serials.length < limit) {
+        if (count < limit) {
             lowStockCount++;
-            lowStockAlerts.push(`${m.hp} HP Motor (${m.phase}) is low: ${m.serials.length}`);
+            const unit = m.unit || "NO'S";
+            const godownText = currentGodownFilter === 'all' ? 'All Godowns' : currentGodownFilter;
+            lowStockAlerts.push(`${m.hp} HP Motor (${m.phase}) in ${godownText} is low: ${count} ${unit}`);
         }
     });
 
     state.fittings.forEach(f => {
         if (f.stock) {
-            const limit = f.lowStockLimit !== undefined ? f.lowStockLimit : 10;
             Object.keys(f.stock).forEach(g => {
+                if (currentGodownFilter !== 'all' && g !== currentGodownFilter) return;
                 const godownStock = f.stock[g] || {};
                 Object.entries(godownStock).forEach(([col, val]) => {
                     totalFittings += val;
+                    const limit = (f.lowStockLimits && f.lowStockLimits[col] !== undefined)
+                        ? f.lowStockLimits[col]
+                        : (f.lowStockLimit !== undefined ? f.lowStockLimit : 10);
                     if (val < limit) {
                         lowStockCount++;
-                        lowStockAlerts.push(`Fitting ${f.name} ${f.type} (${g} - ${col}) is low: ${val}`);
+                        const unit = f.unit || "NO'S";
+                        lowStockAlerts.push(`Fitting ${f.name} ${f.type} (${g} - ${col}) is low: ${val} ${unit}`);
                     }
                 });
             });
@@ -116,11 +131,15 @@ function updateDashboard() {
             const columns = state.pipeSchemas[pipe.type] || [];
             columns.forEach(col => {
                 const val = getPipeStockVal(pipe, col, currentGodownFilter);
+                const limit = (pipe.lowStockLimits && pipe.lowStockLimits[col] !== undefined)
+                    ? pipe.lowStockLimits[col]
+                    : (pipe.lowStockLimit !== undefined ? pipe.lowStockLimit : 20);
+                const unit = pipe.unit || "NO'S";
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="text-align: left;"><strong>${pipe.type} - ${pipe.size}</strong></td>
                     <td style="text-align: left;">${col}</td>
-                    <td style="text-align: center;"><span class="badge ${val < 20 ? 'badge-danger' : 'badge-success'}">${val}</span></td>
+                    <td style="text-align: center;"><span class="badge ${val < limit ? 'badge-danger' : 'badge-success'}">${val} ${unit}</span></td>
                 `;
                 dashPipeBody.appendChild(tr);
             });
@@ -134,11 +153,15 @@ function updateDashboard() {
             const columns = state.fittingSchemas[fitting.type] || [];
             columns.forEach(col => {
                 const val = getFittingStockVal(fitting, col, currentGodownFilter);
+                const limit = (fitting.lowStockLimits && fitting.lowStockLimits[col] !== undefined)
+                    ? fitting.lowStockLimits[col]
+                    : (fitting.lowStockLimit !== undefined ? fitting.lowStockLimit : 10);
+                const unit = fitting.unit || "NO'S";
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td style="text-align: left;"><strong>${fitting.type} ${fitting.name}</strong></td>
                     <td style="text-align: left;">${col}</td>
-                    <td style="text-align: center;"><span class="badge ${val < 10 ? 'badge-danger' : 'badge-success'}">${val}</span></td>
+                    <td style="text-align: center;"><span class="badge ${val < limit ? 'badge-danger' : 'badge-success'}">${val} ${unit}</span></td>
                 `;
                 dashFittingBody.appendChild(tr);
             });
@@ -149,13 +172,17 @@ function updateDashboard() {
     if (dashMotorBody) {
         dashMotorBody.innerHTML = '';
         state.motors.forEach(motor => {
-            const val = motor.serials.length;
+            const activeSerials = currentGodownFilter === 'all'
+                ? motor.serials
+                : motor.serials.filter(s => s.godown && s.godown.toLowerCase() === currentGodownFilter.toLowerCase());
+            const val = activeSerials.length;
             const limit = motor.lowStockLimit !== undefined ? motor.lowStockLimit : 5;
+            const unit = motor.unit || "NO'S";
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="text-align: left;"><strong>CRI MOTOR - ${motor.hp} HP</strong></td>
                 <td style="text-align: left;">${motor.type} (${motor.phase})</td>
-                <td style="text-align: center;"><span class="badge ${val < limit ? 'badge-danger' : 'badge-success'}">${val}</span></td>
+                <td style="text-align: center;"><span class="badge ${val < limit ? 'badge-danger' : 'badge-success'}">${val} ${unit}</span></td>
             `;
             dashMotorBody.appendChild(tr);
         });
@@ -290,67 +317,88 @@ function renderCompleteStockTable() {
             : `<span class="location-pill-empty">No stock breakdown</span>`;
         const totalStock = motor.serials.length;
         const totalStockClass = totalStock <= (motor.lowStockLimit || 5) ? 'stock-value-red' : '';
+        const unit = motor.unit || "NO'S";
         return `
             <tr>
                 <td><span class="badge-cri">CRI</span></td>
                 <td style="font-weight: 600;">${motor.type || 'Motor'}</td>
                 <td>${motor.hp || 'Standard'} / ${motor.phase || 'Single Phase'}</td>
                 <td>${breakdownStr}</td>
-                <td style="font-weight: 700; text-align: right;" class="${totalStockClass}">${totalStock}</td>
+                <td style="font-weight: 700; text-align: right;" class="${totalStockClass}">${totalStock} ${unit}</td>
             </tr>
         `;
     });
 
-    const pipeRows = state.pipes.map(pipe => {
-        let totalStock = 0;
-        const locCounts = {};
-        if (pipe.stock) {
-            Object.keys(pipe.stock).forEach(g => {
-                const godownStock = pipe.stock[g] || {};
-                let gSum = Object.values(godownStock).reduce((a, b) => a + b, 0);
-                if (gSum > 0) locCounts[g.toUpperCase()] = gSum;
-                totalStock += gSum;
-            });
-        }
-        const breakdownStr = Object.keys(locCounts).length > 0
-            ? Object.entries(locCounts).map(([loc, count]) => `<span class="location-pill">${loc}: ${count}</span>`).join('')
-            : `<span class="location-pill-empty">No stock breakdown</span>`;
-        const totalStockClass = totalStock < 20 ? 'stock-value-red' : '';
-        return `
-            <tr>
-                <td><span class="badge-supreme">Supreme</span></td>
-                <td style="font-weight: 600;">${pipe.type || 'Pipe'}</td>
-                <td>${pipe.size}</td>
-                <td>${breakdownStr}</td>
-                <td style="font-weight: 700; text-align: right;" class="${totalStockClass}">${totalStock}</td>
-            </tr>
-        `;
+    const pipeRows = [];
+    state.pipes.forEach(pipe => {
+        const columns = state.pipeSchemas[pipe.type] || ["Stock"];
+        columns.forEach(col => {
+            let totalStock = 0;
+            const locCounts = {};
+            if (pipe.stock) {
+                Object.keys(pipe.stock).forEach(g => {
+                    const godownStock = pipe.stock[g] || {};
+                    const val = godownStock[col] || 0;
+                    if (val > 0) {
+                        locCounts[g.toUpperCase()] = (locCounts[g.toUpperCase()] || 0) + val;
+                        totalStock += val;
+                    }
+                });
+            }
+            const breakdownStr = Object.keys(locCounts).length > 0
+                ? Object.entries(locCounts).map(([loc, count]) => `<span class="location-pill">${loc}: ${count}</span>`).join('')
+                : `<span class="location-pill-empty">No stock breakdown</span>`;
+            const limit = (pipe.lowStockLimits && pipe.lowStockLimits[col] !== undefined)
+                ? pipe.lowStockLimits[col]
+                : (pipe.lowStockLimit !== undefined ? pipe.lowStockLimit : 20);
+            const totalStockClass = totalStock < limit ? 'stock-value-red' : '';
+            const unit = pipe.unit || "NO'S";
+            pipeRows.push(`
+                <tr>
+                    <td><span class="badge-supreme">Supreme</span></td>
+                    <td style="font-weight: 600;">${pipe.type || 'Pipe'}</td>
+                    <td>${pipe.size} (${col})</td>
+                    <td>${breakdownStr}</td>
+                    <td style="font-weight: 700; text-align: right;" class="${totalStockClass}">${totalStock} ${unit}</td>
+                </tr>
+            `);
+        });
     });
 
-    const fittingRows = state.fittings.map(fit => {
-        let totalStock = 0;
-        const locCounts = {};
-        if (fit.stock) {
-            Object.keys(fit.stock).forEach(g => {
-                const godownStock = fit.stock[g] || {};
-                let gSum = Object.values(godownStock).reduce((a, b) => a + b, 0);
-                if (gSum > 0) locCounts[g.toUpperCase()] = gSum;
-                totalStock += gSum;
-            });
-        }
-        const breakdownStr = Object.keys(locCounts).length > 0
-            ? Object.entries(locCounts).map(([loc, count]) => `<span class="location-pill">${loc}: ${count}</span>`).join('')
-            : `<span class="location-pill-empty">No stock breakdown</span>`;
-        const totalStockClass = totalStock < 10 ? 'stock-value-red' : '';
-        return `
-            <tr>
-                <td><span class="badge-fittings">Fittings</span></td>
-                <td style="font-weight: 600;">${fit.name || 'Fitting'}</td>
-                <td>${fit.type || 'CPVC Fittings'}</td>
-                <td>${breakdownStr}</td>
-                <td style="font-weight: 700; text-align: right;" class="${totalStockClass}">${totalStock}</td>
-            </tr>
-        `;
+    const fittingRows = [];
+    state.fittings.forEach(fit => {
+        const columns = state.fittingSchemas[fit.type] || ["Size"];
+        columns.forEach(col => {
+            let totalStock = 0;
+            const locCounts = {};
+            if (fit.stock) {
+                Object.keys(fit.stock).forEach(g => {
+                    const godownStock = fit.stock[g] || {};
+                    const val = godownStock[col] || 0;
+                    if (val > 0) {
+                        locCounts[g.toUpperCase()] = (locCounts[g.toUpperCase()] || 0) + val;
+                        totalStock += val;
+                    }
+                });
+            }
+            const breakdownStr = Object.keys(locCounts).length > 0
+                ? Object.entries(locCounts).map(([loc, count]) => `<span class="location-pill">${loc}: ${count}</span>`).join('')
+                : `<span class="location-pill-empty">No stock breakdown</span>`;
+            const limit = (fit.lowStockLimits && fit.lowStockLimits[col] !== undefined)
+                ? fit.lowStockLimits[col]
+                : (fit.lowStockLimit !== undefined ? fit.lowStockLimit : 10);
+            const totalStockClass = totalStock < limit ? 'stock-value-red' : '';
+            const unit = fit.unit || "NO'S";
+            fittingRows.push(`
+                <tr>
+                    <td><span class="badge-fittings">Fittings</span></td>
+                    <td style="font-weight: 600;">${fit.name || 'Fitting'}</td>
+                    <td>${fit.type || 'CPVC Fittings'} (${col})</td>
+                    <td>${breakdownStr}</td>
+                    <td style="font-weight: 700; text-align: right;" class="${totalStockClass}">${totalStock} ${unit}</td>
+                </tr>
+            `);
+        });
     });
 
     tbody.innerHTML = [...motorRows, ...pipeRows, ...fittingRows].join('') ||

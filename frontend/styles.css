@@ -235,6 +235,26 @@ body {
 .status-indicator.online .status-text {
     color: #059669;
 }
+.status-indicator.offline .status-dot {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+}
+.status-indicator.offline .status-text {
+    color: #dc2626;
+}
+.status-indicator.reconnecting .status-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+    animation: pulse-dot 1s ease-in-out infinite;
+}
+.status-indicator.reconnecting .status-text {
+    color: #d97706;
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+}
 .role-selector {
     display: flex;
     flex-direction: column;
@@ -1810,6 +1830,16 @@ body {
 }
 .btn-action-square.print:hover {
     background-color: rgba(79, 70, 229, 0.15);
+    transform: translateY(-1px);
+}
+
+.btn-action-square.edit {
+    background-color: #fef3c7;
+    border-color: rgba(217, 119, 6, 0.15);
+    color: #d97706;
+}
+.btn-action-square.edit:hover {
+    background-color: rgba(217, 119, 6, 0.15);
     transform: translateY(-1px);
 }
 

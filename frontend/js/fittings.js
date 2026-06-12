@@ -94,14 +94,15 @@ function renderFittings() {
         let trHtml = `
             <td>
                 <strong>${fitting.name}</strong>
-                <i class="fa-solid fa-pencil admin-only" style="color: #3b82f6; cursor: pointer; margin-left: 0.5rem;" onclick="editFittingName('${fitId}')" title="Edit Name"></i>
+                <i class="fa-solid fa-pencil admin-only" style="color: #3b82f6; cursor: pointer; margin-left: 0.5rem;" onclick="openEditFittingModal('${fitId}')" title="Edit Fitting"></i>
             </td>
         `;
 
         columns.forEach(col => {
             const val = getFittingStockVal(fitting, col, currentGodownFilter);
             const escapedCol = col.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-            trHtml += `<td class="editable" onclick="handleFittingStockClick(this, '${fitId}', '${escapedCol}')"><div class="pipe-stock-box">${val}</div></td>`;
+            const unit = fitting.unit || "NO'S";
+            trHtml += `<td class="editable" onclick="handleFittingStockClick(this, '${fitId}', '${escapedCol}')"><div class="pipe-stock-box">${val} ${unit}</div></td>`;
         });
 
         trHtml += `
@@ -155,6 +156,13 @@ window.handleFittingStockClick = function (cellElement, id, col) {
 
     const qtyInput = document.getElementById('addStockQuantityInput');
     qtyInput.value = '';
+    const limitInput = document.getElementById('addStockLimitInput');
+    if (limitInput) {
+        const limitVal = (fitting.lowStockLimits && fitting.lowStockLimits[col] !== undefined)
+            ? fitting.lowStockLimits[col]
+            : (fitting.lowStockLimit !== undefined ? fitting.lowStockLimit : 10);
+        limitInput.value = limitVal;
+    }
     const errorBlock = document.getElementById('addStockErrorBlock');
     errorBlock.style.display = 'none';
     errorBlock.innerText = '';
@@ -193,33 +201,208 @@ window.deleteFitting = function (id) {
     }
 };
 
-// ─── Form Handlers ────────────────────────────────────────────────────────────
+// Add event listener for adding godown allocation row
+document.getElementById('addFittingGodownBtn')?.addEventListener('click', () => {
+    addGodownAllocationRow('fittingGodownAllocationsContainer');
+});
+
+function syncStockWithAllocations(oldStock, godownAllocations, columns) {
+    const stock = { ...oldStock };
+    
+    godownAllocations.forEach(alloc => {
+        const g = alloc.godownName;
+        const targetQty = alloc.quantity;
+        
+        if (!stock[g]) {
+            stock[g] = {};
+        }
+        
+        columns.forEach(col => {
+            if (stock[g][col] === undefined) {
+                stock[g][col] = 0;
+            }
+        });
+        
+        let currentSum = 0;
+        columns.forEach(col => {
+            currentSum += (stock[g][col] || 0);
+        });
+        
+        const diff = targetQty - currentSum;
+        if (diff !== 0) {
+            const firstCol = columns[0] || "Size";
+            stock[g][firstCol] = Math.max(0, (stock[g][firstCol] || 0) + diff);
+        }
+    });
+    
+    const allocatedGodownNames = godownAllocations.map(a => a.godownName);
+    Object.keys(stock).forEach(g => {
+        if (!allocatedGodownNames.includes(g)) {
+            columns.forEach(col => {
+                stock[g][col] = 0;
+            });
+        }
+    });
+    
+    return stock;
+}
+
+window.openAddFittingModal = function () {
+    document.getElementById('editingFittingId').value = '';
+    document.getElementById('fittingModalTitle').textContent = 'Add New Fitting';
+    document.getElementById('fittingSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Fitting';
+    
+    document.getElementById('fittingForm').reset();
+    document.getElementById('fittingTypeInput').disabled = false;
+    document.getElementById('fittingLimit').value = 10;
+    
+    const container = document.getElementById('fittingGodownAllocationsContainer');
+    if (container) {
+        container.innerHTML = '';
+        addGodownAllocationRow('fittingGodownAllocationsContainer', null, 0);
+    }
+    
+    openModal('fittingModal');
+};
+
+window.openEditFittingModal = function (id) {
+    const fitting = state.fittings.find(f => (f._id || f.id) === id);
+    if (!fitting) return;
+    
+    document.getElementById('editingFittingId').value = id;
+    document.getElementById('fittingModalTitle').textContent = 'Edit Fitting Details';
+    document.getElementById('fittingSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
+    
+    document.getElementById('fittingTypeInput').value = fitting.type;
+    document.getElementById('fittingTypeInput').disabled = true;
+    document.getElementById('fittingNameInput').value = fitting.name;
+    document.getElementById('fittingLimit').value = fitting.lowStockLimit || 10;
+    document.getElementById('fittingUnit').value = fitting.unit || "NO'S";
+    
+    let totalQty = 0;
+    let allocations = [];
+    if (fitting.godownAllocations && fitting.godownAllocations.length > 0) {
+        allocations = fitting.godownAllocations;
+        allocations.forEach(a => totalQty += a.quantity);
+    } else if (fitting.stock) {
+        const columns = state.fittingSchemas[fitting.type] || ["Size"];
+        Object.entries(fitting.stock).forEach(([g, cols]) => {
+            let sum = 0;
+            columns.forEach(col => sum += (cols[col] || 0));
+            if (sum > 0) {
+                allocations.push({ godownName: g, quantity: sum });
+                totalQty += sum;
+            }
+        });
+    }
+    
+    document.getElementById('fittingOpeningStock').value = totalQty;
+    
+    const container = document.getElementById('fittingGodownAllocationsContainer');
+    if (container) {
+        container.innerHTML = '';
+        if (allocations.length > 0) {
+            allocations.forEach(alloc => {
+                addGodownAllocationRow('fittingGodownAllocationsContainer', alloc.godownName, alloc.quantity);
+            });
+        } else {
+            addGodownAllocationRow('fittingGodownAllocationsContainer', null, 0);
+        }
+    }
+    
+    openModal('fittingModal');
+};
 
 document.getElementById('fittingForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = document.getElementById('fittingNameInput').value;
+    const editingId = document.getElementById('editingFittingId').value;
+    const name = document.getElementById('fittingNameInput').value.trim();
     const type = document.getElementById('fittingTypeInput').value;
     const limit = parseInt(document.getElementById('fittingLimit').value, 10) || 10;
+    const unit = document.getElementById('fittingUnit').value;
+    const openingStock = parseInt(document.getElementById('fittingOpeningStock').value, 10) || 0;
+
+    const allocations = [];
+    const allocationRows = document.querySelectorAll('#fittingGodownAllocationsContainer .godown-allocation-row');
+    let totalAllocated = 0;
+    let hasErrors = false;
+    const selectedGodowns = [];
+    
+    allocationRows.forEach(row => {
+        const godownName = row.querySelector('.godown-select').value;
+        const qtyStr = row.querySelector('.godown-qty').value.trim();
+        
+        if (qtyStr === '') {
+            alert("Quantity cannot be empty.");
+            hasErrors = true;
+            return;
+        }
+        const qty = parseInt(qtyStr, 10);
+        if (isNaN(qty) || qty < 0) {
+            alert("Quantity cannot be negative.");
+            hasErrors = true;
+            return;
+        }
+        
+        if (selectedGodowns.includes(godownName)) {
+            alert("Duplicate godown selection is not allowed.");
+            hasErrors = true;
+            return;
+        }
+        selectedGodowns.push(godownName);
+        
+        allocations.push({
+            godownId: 'godown-' + Math.random().toString(36).substr(2, 9),
+            godownName,
+            quantity: qty
+        });
+        totalAllocated += qty;
+    });
+    
+    if (hasErrors) return;
+    
+    if (totalAllocated !== openingStock) {
+        alert(`Total allocated quantity (${totalAllocated}) must match the opening stock quantity (${openingStock}).`);
+        return;
+    }
 
     const columns = state.fittingSchemas[type] || ["Size"];
-    let initialStock = {};
-    state.godowns.forEach(g => {
-        initialStock[g] = {};
-        columns.forEach(c => { initialStock[g][c] = 0; });
-    });
 
     try {
-        const newFitting = await API.createFitting({ type, name, stock: initialStock, lowStockLimit: limit });
-        state.fittings.push(newFitting);
-        currentFittingTypeTab = type;
-        renderFittingTabs();
+        if (editingId) {
+            const existingFitting = state.fittings.find(f => (f._id || f.id) === editingId);
+            const stock = syncStockWithAllocations(existingFitting.stock || {}, allocations, columns);
+            
+            const updatedFitting = await API.updateFitting(editingId, { type, name, stock, lowStockLimit: limit, unit, godownAllocations: allocations });
+            
+            const idx = state.fittings.findIndex(f => (f._id || f.id) === editingId);
+            if (idx !== -1) state.fittings[idx] = updatedFitting;
+            
+            showToast("Fitting details updated successfully.");
+        } else {
+            let initialStock = {};
+            state.godowns.forEach(g => {
+                initialStock[g] = {};
+                columns.forEach((c, idx) => {
+                    const alloc = allocations.find(a => a.godownName === g);
+                    initialStock[g][c] = (idx === 0 && alloc) ? alloc.quantity : 0;
+                });
+            });
+
+            const newFitting = await API.createFitting({ type, name, stock: initialStock, lowStockLimit: limit, unit, godownAllocations: allocations });
+            state.fittings.push(newFitting);
+            currentFittingTypeTab = type;
+            renderFittingTabs();
+        }
+
         saveState();
         renderFittings();
         closeModal('fittingModal');
         e.target.reset();
+        document.getElementById('editingFittingId').value = '';
         document.getElementById('fittingLimit').value = 10;
     } catch (err) {
-        alert('Error adding fitting: ' + err.message);
+        alert('Error saving fitting: ' + err.message);
     }
 });
 

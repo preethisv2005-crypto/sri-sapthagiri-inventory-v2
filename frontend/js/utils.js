@@ -76,3 +76,40 @@ function switchView(viewId) {
 // ─── Exports ──────────────────────────────────────────────────────────────────
 window.showToast = showToast;
 window.switchView = switchView;
+
+window.addGodownAllocationRow = function (containerId, initialValue = null, initialQty = '') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'godown-allocation-row';
+    row.style.cssText = 'display: flex; gap: 0.75rem; align-items: center;';
+
+    const godowns = state.godowns || ['Main Godown', 'Shop', 'Godown 3'];
+    
+    // Determine default value
+    let defaultVal = godowns[0];
+    if (initialValue) {
+        defaultVal = initialValue;
+    } else if (currentGodownFilter && currentGodownFilter !== 'all') {
+        defaultVal = currentGodownFilter;
+    }
+
+    const optionsHtml = godowns.map(g => `<option value="${g}" ${g === defaultVal ? 'selected' : ''}>${g}</option>`).join('');
+
+    row.innerHTML = `
+        <select class="godown-select" required style="flex: 2; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;">
+            ${optionsHtml}
+        </select>
+        <input type="number" class="godown-qty" required min="0" placeholder="Qty" value="${initialQty}" style="flex: 1; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;">
+        <button type="button" class="btn-delete-row" style="background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1.1rem; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; transition: var(--transition);">
+            <i class="fa-regular fa-trash-can"></i>
+        </button>
+    `;
+
+    row.querySelector('.btn-delete-row').addEventListener('click', () => {
+        row.remove();
+    });
+
+    container.appendChild(row);
+};

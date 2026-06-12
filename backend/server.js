@@ -3,7 +3,36 @@ const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');
 const morgan  = require('morgan');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
+
+// --- Connect to MongoDB ---
+connectDB();
+
+// --- MongoDB Auto-Reconnect on Disconnect ---
+mongoose.connection.on('connected', () => {
+    console.log('✅ [MongoDB] Connection established');
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.warn('⚠️ [MongoDB] Disconnected — attempting reconnect in 5s...');
+    setTimeout(() => {
+        const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
+        if (uri) {
+            mongoose.connect(uri, {
+                serverSelectionTimeoutMS: 10000,
+                socketTimeoutMS: 45000,
+                family: 4
+            }).catch(err => {
+                console.error('❌ [MongoDB] Reconnect failed:', err.message);
+            });
+        }
+    }, 5000);
+});
+
+mongoose.connection.on('error', (err) => {
+    console.error('❌ [MongoDB] Connection error:', err.message);
+});
 
 const app = express();
 
@@ -21,8 +50,7 @@ const allowedOrigins = [
     // Production domains
     'https://srisapthagirisystems.in',
     'https://www.srisapthagirisystems.in',
-    'https://app.srisapthagirisystems.in',      // ← Inventory app subdomain (Vercel)
-    // Alternate spellings (without trailing 's')
+    'https://app.srisapthagirisystems.in',
     'https://srisapthagirisystem.in',
     'https://www.srisapthagirisystem.in',
     'https://app.srisapthagirisystem.in',
@@ -31,7 +59,7 @@ const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:5173',
-    'http://127.0.0.1:5500',  // VS Code Live Server
+    'http://127.0.0.1:5500',
     'http://127.0.0.1:5501',
     'http://127.0.0.1:3000',
 ];
@@ -43,14 +71,15 @@ app.use(cors({
             return callback(null, true);
         }
 
-        // Allow requests with no origin (curl, Postman, mobile apps)
+        // Production logic
         if (!origin) return callback(null, true);
+        
+        const isVercel = /\.vercel\.app$/.test(origin);
+        const isWhitelisted = allowedOrigins.includes(origin);
 
-        // Allow any Vercel preview deployment
-        if (/\.vercel\.app$/.test(origin)) return callback(null, true);
-
-        // Allow listed origins
-        if (allowedOrigins.includes(origin)) return callback(null, true);
+        if (isVercel || isWhitelisted) {
+            return callback(null, true);
+        }
         
         console.warn(`[CORS] Blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS: ' + origin));
@@ -71,13 +100,20 @@ app.use('/api/motors',   require('./routes/motors'));
 app.use('/api/challans', require('./routes/challans'));
 app.use('/api/settings', require('./routes/settings'));
 
-// --- Health Check ---
+// --- Health Check (includes MongoDB status) ---
 app.get('/api/health', (req, res) => {
-    res.json({
-        status: 'ok',
+    const mongoState = mongoose.connection.readyState;
+    // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+    const mongoStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoState] || 'unknown';
+    const isHealthy = mongoState === 1;
+
+    res.status(isHealthy ? 200 : 503).json({
+        status: isHealthy ? 'ok' : 'degraded',
         message: 'Sri Sapthagiri Logistics API is running',
+        mongo: mongoStatus,
         environment: process.env.NODE_ENV || 'development',
-        time: new Date().toISOString()
+        time: new Date().toISOString(),
+        uptime: Math.floor(process.uptime()) + 's'
     });
 });
 
@@ -101,24 +137,15 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: 'Internal Server Error', error: process.env.NODE_ENV === 'production' ? 'An error occurred' : err.message });
 });
 
-// --- Connect to MongoDB and Start Server ---
-const startServer = async () => {
-    try {
-        await connectDB();
-        
-        const PORT = process.env.PORT || 3001;
-        app.listen(PORT, () => {
-            console.log(`🚀 Sri Sapthagiri Backend running on port ${PORT}`);
-            console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`❤️  Health Check: /api/health`);
-        });
-    } catch (err) {
-        console.error('❌ Failed to start server:', err.message);
-        process.exit(1);
-    }
-};
-
-startServer();
+// --- Start Server ---
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    const PORT = process.env.PORT || 3001;
+    app.listen(PORT, () => {
+        console.log(`🚀 Sri Sapthagiri Backend running on port ${PORT}`);
+        console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`❤️  Health Check: /api/health`);
+    });
+}
 
 // --- Background Data Retention Scheduler ---
 const Settings = require('./models/Settings');
@@ -147,3 +174,20 @@ const checkAndCleanupData = async () => {
 // Run 15s after startup, then every 24 hours
 setTimeout(checkAndCleanupData, 15000);
 setInterval(checkAndCleanupData, 24 * 60 * 60 * 1000);
+
+// --- Graceful Shutdown ---
+const gracefulShutdown = async (signal) => {
+    console.log(`\n🛑 [${signal}] Shutting down gracefully...`);
+    try {
+        await mongoose.connection.close();
+        console.log('✅ MongoDB connection closed.');
+    } catch (err) {
+        console.error('❌ Error closing MongoDB:', err.message);
+    }
+    process.exit(0);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+module.exports = app;

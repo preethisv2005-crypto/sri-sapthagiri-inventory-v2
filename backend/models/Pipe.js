@@ -20,6 +20,23 @@ const PipeSchema = new mongoose.Schema({
     lowStockLimit: {
         type: Number,
         default: 20
+    },
+    lowStockLimits: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+    },
+    unit: {
+        type: String,
+        enum: ['LENGTH', 'MTR', "NO'S", 'FEETS', 'LITR', 'KG'],
+        default: "NO'S"
+    },
+    godownAllocations: {
+        type: [{
+            godownId: { type: String, required: true },
+            godownName: { type: String, required: true },
+            quantity: { type: Number, required: true, default: 0 }
+        }],
+        default: []
     }
 }, {
     timestamps: true

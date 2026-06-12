@@ -14,7 +14,7 @@ exports.getAllFittings = async (req, res) => {
 // POST /api/fittings
 exports.createFitting = async (req, res) => {
     try {
-        const { type, name, stock, lowStockLimit } = req.body;
+        const { type, name, stock, lowStockLimit, lowStockLimits, unit, godownAllocations } = req.body;
         const performedBy = req.headers['x-user-role'] || 'admin';
         
         if (!type || !name) {
@@ -30,7 +30,7 @@ exports.createFitting = async (req, res) => {
             return res.status(409).json({ message: 'This fitting already exists.' });
         }
         
-        const fitting = new Fitting({ type, name: name.toUpperCase(), stock: stock || {}, lowStockLimit });
+        const fitting = new Fitting({ type, name: name.toUpperCase(), stock: stock || {}, lowStockLimit, lowStockLimits, unit, godownAllocations: godownAllocations || [] });
         await fitting.save();
         
         // Log action

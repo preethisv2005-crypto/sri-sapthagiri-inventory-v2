@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const SerialSchema = new mongoose.Schema({
     sn: { type: String, required: true },
-    godown: { type: String, default: 'Main Godown' }
+    godown: { type: String, default: 'Main Godown' },
+    status: { type: String, enum: ['Available', 'Dispatched'], default: 'Available' }
 }, { _id: false });
 
 const MotorSchema = new mongoose.Schema({
@@ -30,6 +31,11 @@ const MotorSchema = new mongoose.Schema({
     lowStockLimit: {
         type: Number,
         default: 5
+    },
+    unit: {
+        type: String,
+        enum: ['LENGTH', 'MTR', "NO'S", 'FEETS', 'LITR', 'KG'],
+        default: "NO'S"
     }
 }, {
     timestamps: true

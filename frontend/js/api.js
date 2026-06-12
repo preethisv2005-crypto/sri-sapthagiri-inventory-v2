@@ -1,6 +1,7 @@
 /**
  * api.js - All API calls to the backend
- * Sri Sapthagiri Logistics Inventory System
+ * Includes retry logic, timeout handling, and keep-alive to prevent
+ * Render free-tier cold-start "server offline" issues.
  */
 
 // ─── API Configuration ───────────────────────────────────────────────────────
@@ -22,14 +23,47 @@ const getApiBase = () => {
         return `http://${host}:3001/api`;
     }
 
-    // 4. Default to production (Render)
-    return 'https://sri-sapthagiri-backend.onrender.com/api';
+    // 4. Default to production (Vercel relative API path)
+    return window.location.origin + '/api';
 };
 
 const API_BASE = getApiBase();
 console.log(`🔌 API Base URL: ${API_BASE}`);
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// ─── Retry & Timeout Configuration ───────────────────────────────────────────
+
+const API_CONFIG = {
+    maxRetries: 3,              // Number of retries on failure
+    retryDelayMs: 1000,         // Base delay (doubles each retry)
+    requestTimeoutMs: 15000,    // 15s timeout per request
+    coldStartTimeoutMs: 45000,  // 45s timeout for cold-start wake-up
+    keepAliveIntervalMs: 4 * 60 * 1000,  // Ping every 4 minutes to prevent Render sleep
+    healthCheckRetries: 2,      // Retries specifically for health checks
+};
+
+// Track server state for smarter retry behavior
+let _serverAwake = false;
+let _keepAliveTimer = null;
+
+// ─── Helper: Fetch with Timeout ──────────────────────────────────────────────
+
+function fetchWithTimeout(url, options = {}, timeoutMs = API_CONFIG.requestTimeoutMs) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    return fetch(url, {
+        ...options,
+        signal: controller.signal
+    }).finally(() => clearTimeout(timeoutId));
+}
+
+// ─── Helper: Sleep ───────────────────────────────────────────────────────────
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ─── Headers ─────────────────────────────────────────────────────────────────
 
 function getHeaders() {
     const role = window.state && window.state.currentUser ? window.state.currentUser.role : '';
@@ -39,30 +73,153 @@ function getHeaders() {
     };
 }
 
-async function apiCall(method, path, body = null) {
+// ─── Core API Call with Retry + Timeout ──────────────────────────────────────
+
+async function apiCall(method, path, body = null, retryCount = API_CONFIG.maxRetries) {
+    const url = `${API_BASE}${path}`;
     const options = {
         method,
         headers: getHeaders()
     };
     if (body) options.body = JSON.stringify(body);
 
-    const res = await fetch(`${API_BASE}${path}`, options);
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(err.message || `API Error: ${res.status}`);
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= retryCount; attempt++) {
+        try {
+            // Use longer timeout if server hasn't been confirmed awake yet
+            const timeout = _serverAwake
+                ? API_CONFIG.requestTimeoutMs
+                : API_CONFIG.coldStartTimeoutMs;
+
+            const res = await fetchWithTimeout(url, options, timeout);
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ message: 'Unknown error' }));
+
+                // Don't retry on client errors (4xx) except 408 (timeout) and 429 (rate limit)
+                if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+                    throw new Error(err.message || `API Error: ${res.status}`);
+                }
+
+                throw new Error(err.message || `Server Error: ${res.status}`);
+            }
+
+            // Success — server is awake
+            _serverAwake = true;
+            return res.json();
+
+        } catch (err) {
+            lastError = err;
+
+            // Identify retryable errors
+            const isNetworkError = err.name === 'TypeError' && err.message.includes('fetch');
+            const isAbortError = err.name === 'AbortError';
+            const isServerError = err.message && /Server Error: 5\d\d/.test(err.message);
+
+            const isRetryable = isNetworkError || isAbortError || isServerError;
+
+            if (isRetryable && attempt < retryCount) {
+                const delay = API_CONFIG.retryDelayMs * Math.pow(2, attempt);
+                console.warn(`🔄 API retry ${attempt + 1}/${retryCount} for ${method} ${path} in ${delay}ms...`);
+                await sleep(delay);
+                continue;
+            }
+
+            // Non-retryable or exhausted retries — throw
+            break;
+        }
     }
-    return res.json();
+
+    throw lastError;
 }
 
-// ─── Health Check ─────────────────────────────────────────────────────────────
+// ─── Health Check (with its own retry logic) ─────────────────────────────────
 
 async function checkServerHealth() {
-    try {
-        const data = await apiCall('GET', '/health');
-        return data.status === 'ok';
-    } catch {
-        return false;
+    // Try multiple times before declaring offline
+    for (let attempt = 0; attempt <= API_CONFIG.healthCheckRetries; attempt++) {
+        try {
+            const timeout = _serverAwake
+                ? API_CONFIG.requestTimeoutMs
+                : API_CONFIG.coldStartTimeoutMs;
+
+            const res = await fetchWithTimeout(
+                `${API_BASE}/health`,
+                { method: 'GET', headers: getHeaders() },
+                timeout
+            );
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    _serverAwake = true;
+                    return true;
+                }
+            }
+        } catch (err) {
+            console.warn(`📡 Health check attempt ${attempt + 1} failed:`, err.message);
+
+            if (attempt < API_CONFIG.healthCheckRetries) {
+                await sleep(API_CONFIG.retryDelayMs * Math.pow(2, attempt));
+                continue;
+            }
+        }
     }
+
+    _serverAwake = false;
+    return false;
+}
+
+// ─── Keep-Alive Pinger (prevents Render free-tier cold starts) ───────────────
+
+function startKeepAlive() {
+    // Don't start multiple timers
+    if (_keepAliveTimer) return;
+
+    _keepAliveTimer = setInterval(async () => {
+        try {
+            await fetchWithTimeout(
+                `${API_BASE}/health`,
+                { method: 'GET' },
+                10000
+            );
+            _serverAwake = true;
+        } catch {
+            // Silent fail — the periodic connection status check will handle UI
+            console.warn('💤 Keep-alive ping failed (server may be sleeping)');
+        }
+    }, API_CONFIG.keepAliveIntervalMs);
+
+    console.log('🏓 Keep-alive pinger started (every 4 minutes)');
+}
+
+function stopKeepAlive() {
+    if (_keepAliveTimer) {
+        clearInterval(_keepAliveTimer);
+        _keepAliveTimer = null;
+        console.log('🏓 Keep-alive pinger stopped');
+    }
+}
+
+// ─── Wake Server (call on app init to pre-warm) ─────────────────────────────
+
+async function wakeServer() {
+    console.log('⏰ Waking up server...');
+    try {
+        const isOnline = await checkServerHealth();
+        if (isOnline) {
+            console.log('✅ Server is awake and responding');
+            startKeepAlive();
+            return true;
+        }
+    } catch {
+        // Ignore
+    }
+    console.warn('⚠️ Server did not respond to wake-up');
+    // Still start keep-alive so it keeps trying
+    startKeepAlive();
+    return false;
 }
 
 // ─── Settings (schemas + godowns) ─────────────────────────────────────────────
@@ -172,7 +329,8 @@ async function fetchAuditLogs() {
 // ─── Expose to window ─────────────────────────────────────────────────────────
 
 window.API = {
-    checkServerHealth,
+    checkServerHealth, wakeServer,
+    startKeepAlive, stopKeepAlive,
     fetchSettings, saveSettings,
     fetchRetentionCount, triggerManualCleanup, fetchAuditLogs,
     fetchPipes, createPipe, updatePipe, deletePipeApi,

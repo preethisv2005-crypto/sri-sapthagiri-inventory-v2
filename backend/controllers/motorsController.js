@@ -14,7 +14,7 @@ exports.getAllMotors = async (req, res) => {
 // POST /api/motors - Add new motor type
 exports.createMotor = async (req, res) => {
     try {
-        const { type, hp, phase, lowStockLimit } = req.body;
+        const { type, hp, phase, lowStockLimit, unit } = req.body;
         const performedBy = req.headers['x-user-role'] || 'admin';
         
         if (!type || !hp || !phase) {
@@ -29,7 +29,7 @@ exports.createMotor = async (req, res) => {
         if (existing) {
             return res.status(409).json({ message: 'This motor specification already exists.' });
         }
-        const motor = new Motor({ type, hp, phase, serials: [], lowStockLimit });
+        const motor = new Motor({ type, hp, phase, serials: [], lowStockLimit, unit });
         await motor.save();
         
         // Log action

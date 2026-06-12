@@ -15,7 +15,7 @@ exports.getAllPipes = async (req, res) => {
 // POST /api/pipes - Create new pipe
 exports.createPipe = async (req, res) => {
     try {
-        const { type, size, stock, lowStockLimit } = req.body;
+        const { type, size, stock, lowStockLimit, lowStockLimits, unit, godownAllocations } = req.body;
         const performedBy = req.headers['x-user-role'] || 'admin';
         
         if (!type || !size) {
@@ -31,7 +31,7 @@ exports.createPipe = async (req, res) => {
             return res.status(409).json({ message: 'This pipe specification already exists.' });
         }
         
-        const pipe = new Pipe({ type, size, stock: stock || {}, lowStockLimit });
+        const pipe = new Pipe({ type, size, stock: stock || {}, lowStockLimit, lowStockLimits, unit, godownAllocations: godownAllocations || [] });
         await pipe.save();
         
         // Log activity

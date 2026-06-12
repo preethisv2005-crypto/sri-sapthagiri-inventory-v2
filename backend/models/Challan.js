@@ -16,7 +16,7 @@ const ChallanSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['Inward', 'Outward'],
+        enum: ['Inward', 'Outward', 'Internal'],
         default: 'Outward'
     },
     date: {

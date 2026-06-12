@@ -57,38 +57,55 @@ window.saveState = function () {
     renderLogs();
 };
 
-// ─── Server Status Indicator ──────────────────────────────────────────────────
+// ─── Server Status Indicator (with failure tolerance) ─────────────────────────
+
+let _healthFailCount = 0;
+const HEALTH_FAIL_THRESHOLD = 3; // Show offline only after 3 consecutive failures
 
 async function updateConnectionStatus() {
     const indicator = document.getElementById('connection-status');
     if (!indicator) return;
 
+    const dot = indicator.querySelector('.status-dot');
+    const text = indicator.querySelector('.status-text');
+
     try {
         const isOnline = await API.checkServerHealth();
-        const dot = indicator.querySelector('.status-dot');
-        const text = indicator.querySelector('.status-text');
 
         if (isOnline) {
+            _healthFailCount = 0;
             indicator.className = 'status-indicator online';
             if (dot) dot.style.background = '#10b981';
             if (text) text.textContent = 'Server Online';
         } else {
-            throw new Error('Health check failed');
+            throw new Error('Health check returned not-ok');
         }
     } catch (err) {
-        console.error('📡 Connection Check Failed:', err.message);
-        indicator.className = 'status-indicator offline';
-        const dot = indicator.querySelector('.status-dot');
-        const text = indicator.querySelector('.status-text');
-        if (dot) dot.style.background = '#ef4444';
-        if (text) text.textContent = 'Server Offline';
+        _healthFailCount++;
+        console.warn(`📡 Health check failed (${_healthFailCount}/${HEALTH_FAIL_THRESHOLD}):`, err.message);
+
+        if (_healthFailCount < HEALTH_FAIL_THRESHOLD) {
+            // Show a "reconnecting" intermediate state, not yet offline
+            indicator.className = 'status-indicator reconnecting';
+            if (dot) dot.style.background = '#f59e0b';
+            if (text) text.textContent = 'Reconnecting...';
+        } else {
+            // Confirmed offline after multiple failures
+            indicator.className = 'status-indicator offline';
+            if (dot) dot.style.background = '#ef4444';
+            if (text) text.textContent = 'Server Offline';
+        }
     }
 }
 
 // ─── Load Data From Backend ───────────────────────────────────────────────────
+window.loadDataFromBackend = loadDataFromBackend;
 
 async function loadDataFromBackend() {
     try {
+        // Pre-warm the server (handles Render cold-start)
+        await API.wakeServer();
+
         // Load settings first (schemas + godowns)
         const settings = await API.fetchSettings();
         state.pipeSchemas = settings.pipeSchemas || defaultSchemas;
@@ -114,6 +131,9 @@ async function loadDataFromBackend() {
             motors: motors.length,
             challans: challans.length
         });
+
+        // Update connection status immediately after successful load
+        updateConnectionStatus();
 
         return true;
     } catch (err) {
@@ -314,6 +334,7 @@ document.getElementById('addStockForm')?.addEventListener('submit', async (e) =>
     if (!pendingStockAddition) return;
 
     const qtyInput = document.getElementById('addStockQuantityInput');
+    const limitInput = document.getElementById('addStockLimitInput');
     const errorBlock = document.getElementById('addStockErrorBlock');
     errorBlock.style.display = 'none';
     errorBlock.innerText = '';
@@ -323,6 +344,12 @@ document.getElementById('addStockForm')?.addEventListener('submit', async (e) =>
 
     const qtyVal = parseInt(qtyStr, 10);
     if (isNaN(qtyVal)) { errorBlock.innerText = "Please enter a valid numeric quantity."; errorBlock.style.display = 'block'; return; }
+
+    const limitStr = limitInput ? limitInput.value.trim() : '';
+    if (limitStr === '') { errorBlock.innerText = "Please enter a valid low stock limit."; errorBlock.style.display = 'block'; return; }
+
+    const limitVal = parseInt(limitStr, 10);
+    if (isNaN(limitVal) || limitVal < 0) { errorBlock.innerText = "Low stock limit must be 0 or greater."; errorBlock.style.display = 'block'; return; }
 
     const { type, id, col, currentVal, godown } = pendingStockAddition;
 
@@ -339,7 +366,24 @@ document.getElementById('addStockForm')?.addEventListener('submit', async (e) =>
                 if (!pipe.stock) pipe.stock = {};
                 if (!pipe.stock[godown]) pipe.stock[godown] = {};
                 pipe.stock[godown][col] = currentVal + qtyVal;
-                await API.updatePipe(id, { stock: pipe.stock });
+
+                if (!pipe.lowStockLimits) pipe.lowStockLimits = {};
+                pipe.lowStockLimits[col] = limitVal;
+
+                // Sync godownAllocations
+                if (!pipe.godownAllocations) pipe.godownAllocations = [];
+                let alloc = pipe.godownAllocations.find(a => a.godownName === godown);
+                if (alloc) {
+                    alloc.quantity = Math.max(0, alloc.quantity + qtyVal);
+                } else {
+                    pipe.godownAllocations.push({
+                        godownId: 'godown-' + Math.random().toString(36).substr(2, 9),
+                        godownName: godown,
+                        quantity: Math.max(0, qtyVal)
+                    });
+                }
+
+                await API.updatePipe(id, { stock: pipe.stock, lowStockLimits: pipe.lowStockLimits, godownAllocations: pipe.godownAllocations });
                 saveState();
                 renderPipes();
             }
@@ -349,7 +393,24 @@ document.getElementById('addStockForm')?.addEventListener('submit', async (e) =>
                 if (!fitting.stock) fitting.stock = {};
                 if (!fitting.stock[godown]) fitting.stock[godown] = {};
                 fitting.stock[godown][col] = currentVal + qtyVal;
-                await API.updateFitting(id, { stock: fitting.stock });
+
+                if (!fitting.lowStockLimits) fitting.lowStockLimits = {};
+                fitting.lowStockLimits[col] = limitVal;
+
+                // Sync godownAllocations
+                if (!fitting.godownAllocations) fitting.godownAllocations = [];
+                let alloc = fitting.godownAllocations.find(a => a.godownName === godown);
+                if (alloc) {
+                    alloc.quantity = Math.max(0, alloc.quantity + qtyVal);
+                } else {
+                    fitting.godownAllocations.push({
+                        godownId: 'godown-' + Math.random().toString(36).substr(2, 9),
+                        godownName: godown,
+                        quantity: Math.max(0, qtyVal)
+                    });
+                }
+
+                await API.updateFitting(id, { stock: fitting.stock, lowStockLimits: fitting.lowStockLimits, godownAllocations: fitting.godownAllocations });
                 saveState();
                 renderFittings();
             }
@@ -384,10 +445,27 @@ document.addEventListener('click', (e) => {
 // ─── Init Connection Status on Page Load ──────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-    updateConnectionStatus();
-    // Check every 10 seconds instead of just once
-    setInterval(updateConnectionStatus, 10000);
+    // Initial wake-up + health check
+    API.wakeServer().then(() => {
+        updateConnectionStatus();
+    });
+
+    // Check connection every 30 seconds (less aggressive than 10s, but with retry tolerance)
+    setInterval(updateConnectionStatus, 30000);
+
+    // Start keep-alive pinger to prevent Render free-tier cold starts
+    API.startKeepAlive();
+
     setupSerialSearch();
+
+    // Also re-check when the browser tab becomes visible again (user returns)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            console.log('👁️ Tab visible — re-checking server status...');
+            _healthFailCount = 0; // Reset so we don't flash offline
+            updateConnectionStatus();
+        }
+    });
 });
 
 // Mobile navigation sidebar toggler helper

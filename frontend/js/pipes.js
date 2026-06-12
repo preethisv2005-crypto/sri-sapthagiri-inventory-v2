@@ -96,14 +96,15 @@ function renderPipes() {
         let trHtml = `
             <td>
                 <strong>${pipe.size}</strong>
-                <i class="fa-solid fa-pencil admin-only" style="color: #3b82f6; cursor: pointer; margin-left: 0.5rem;" onclick="editPipeSize('${pipeId}')" title="Edit Size"></i>
+                <i class="fa-solid fa-pencil admin-only" style="color: #3b82f6; cursor: pointer; margin-left: 0.5rem;" onclick="openEditPipeModal('${pipeId}')" title="Edit Pipe"></i>
             </td>
         `;
 
         columns.forEach(col => {
             const val = getPipeStockVal(pipe, col, currentGodownFilter);
             const escapedCol = col.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-            trHtml += `<td class="editable" onclick="handlePipeStockClick(this, '${pipeId}', '${escapedCol}')"><div class="pipe-stock-box">${val}</div></td>`;
+            const unit = pipe.unit || "NO'S";
+            trHtml += `<td class="editable" onclick="handlePipeStockClick(this, '${pipeId}', '${escapedCol}')"><div class="pipe-stock-box">${val} ${unit}</div></td>`;
         });
 
         trHtml += `
@@ -158,6 +159,13 @@ window.handlePipeStockClick = function (cellElement, id, col) {
 
     const qtyInput = document.getElementById('addStockQuantityInput');
     qtyInput.value = '';
+    const limitInput = document.getElementById('addStockLimitInput');
+    if (limitInput) {
+        const limitVal = (pipe.lowStockLimits && pipe.lowStockLimits[col] !== undefined)
+            ? pipe.lowStockLimits[col]
+            : (pipe.lowStockLimit !== undefined ? pipe.lowStockLimit : 20);
+        limitInput.value = limitVal;
+    }
     const errorBlock = document.getElementById('addStockErrorBlock');
     errorBlock.style.display = 'none';
     errorBlock.innerText = '';
@@ -195,31 +203,204 @@ window.deletePipe = function (id) {
     }
 };
 
-// ─── Form Handlers ────────────────────────────────────────────────────────────
+// Add event listener for adding godown allocation row
+document.getElementById('addPipeGodownBtn').addEventListener('click', () => {
+    addGodownAllocationRow('pipeGodownAllocationsContainer');
+});
+
+function syncStockWithAllocations(oldStock, godownAllocations, columns) {
+    const stock = { ...oldStock };
+    
+    godownAllocations.forEach(alloc => {
+        const g = alloc.godownName;
+        const targetQty = alloc.quantity;
+        
+        if (!stock[g]) {
+            stock[g] = {};
+        }
+        
+        columns.forEach(col => {
+            if (stock[g][col] === undefined) {
+                stock[g][col] = 0;
+            }
+        });
+        
+        let currentSum = 0;
+        columns.forEach(col => {
+            currentSum += (stock[g][col] || 0);
+        });
+        
+        const diff = targetQty - currentSum;
+        if (diff !== 0) {
+            const firstCol = columns[0] || "Stock";
+            stock[g][firstCol] = Math.max(0, (stock[g][firstCol] || 0) + diff);
+        }
+    });
+    
+    const allocatedGodownNames = godownAllocations.map(a => a.godownName);
+    Object.keys(stock).forEach(g => {
+        if (!allocatedGodownNames.includes(g)) {
+            columns.forEach(col => {
+                stock[g][col] = 0;
+            });
+        }
+    });
+    
+    return stock;
+}
+
+window.openAddPipeModal = function () {
+    document.getElementById('editingPipeId').value = '';
+    document.getElementById('pipeModalTitle').textContent = 'Add New Pipe Size';
+    document.getElementById('pipeSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Create Pipe';
+    
+    document.getElementById('pipeForm').reset();
+    document.getElementById('pipeTypeInput').disabled = false;
+    
+    const container = document.getElementById('pipeGodownAllocationsContainer');
+    if (container) {
+        container.innerHTML = '';
+        addGodownAllocationRow('pipeGodownAllocationsContainer', null, 0);
+    }
+    
+    openModal('pipeModal');
+};
+
+window.openEditPipeModal = function (id) {
+    const pipe = state.pipes.find(p => (p._id || p.id) === id);
+    if (!pipe) return;
+    
+    document.getElementById('editingPipeId').value = id;
+    document.getElementById('pipeModalTitle').textContent = 'Edit Pipe Details';
+    document.getElementById('pipeSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Changes';
+    
+    document.getElementById('pipeTypeInput').value = pipe.type;
+    document.getElementById('pipeTypeInput').disabled = true;
+    document.getElementById('pipeSizeInput').value = pipe.size;
+    document.getElementById('pipeUnit').value = pipe.unit || "NO'S";
+    
+    let totalQty = 0;
+    let allocations = [];
+    if (pipe.godownAllocations && pipe.godownAllocations.length > 0) {
+        allocations = pipe.godownAllocations;
+        allocations.forEach(a => totalQty += a.quantity);
+    } else if (pipe.stock) {
+        const columns = state.pipeSchemas[pipe.type] || ["Stock"];
+        Object.entries(pipe.stock).forEach(([g, cols]) => {
+            let sum = 0;
+            columns.forEach(col => sum += (cols[col] || 0));
+            if (sum > 0) {
+                allocations.push({ godownName: g, quantity: sum });
+                totalQty += sum;
+            }
+        });
+    }
+    
+    document.getElementById('pipeOpeningStock').value = totalQty;
+    
+    const container = document.getElementById('pipeGodownAllocationsContainer');
+    if (container) {
+        container.innerHTML = '';
+        if (allocations.length > 0) {
+            allocations.forEach(alloc => {
+                addGodownAllocationRow('pipeGodownAllocationsContainer', alloc.godownName, alloc.quantity);
+            });
+        } else {
+            addGodownAllocationRow('pipeGodownAllocationsContainer', null, 0);
+        }
+    }
+    
+    openModal('pipeModal');
+};
 
 document.getElementById('pipeForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const size = document.getElementById('pipeSizeInput').value;
+    const editingId = document.getElementById('editingPipeId').value;
+    const size = document.getElementById('pipeSizeInput').value.trim();
     const type = document.getElementById('pipeTypeInput').value;
+    const unit = document.getElementById('pipeUnit').value;
+    const openingStock = parseInt(document.getElementById('pipeOpeningStock').value, 10) || 0;
+
+    const allocations = [];
+    const allocationRows = document.querySelectorAll('#pipeGodownAllocationsContainer .godown-allocation-row');
+    let totalAllocated = 0;
+    let hasErrors = false;
+    const selectedGodowns = [];
+    
+    allocationRows.forEach(row => {
+        const godownName = row.querySelector('.godown-select').value;
+        const qtyStr = row.querySelector('.godown-qty').value.trim();
+        
+        if (qtyStr === '') {
+            alert("Quantity cannot be empty.");
+            hasErrors = true;
+            return;
+        }
+        const qty = parseInt(qtyStr, 10);
+        if (isNaN(qty) || qty < 0) {
+            alert("Quantity cannot be negative.");
+            hasErrors = true;
+            return;
+        }
+        
+        if (selectedGodowns.includes(godownName)) {
+            alert("Duplicate godown selection is not allowed.");
+            hasErrors = true;
+            return;
+        }
+        selectedGodowns.push(godownName);
+        
+        allocations.push({
+            godownId: 'godown-' + Math.random().toString(36).substr(2, 9),
+            godownName,
+            quantity: qty
+        });
+        totalAllocated += qty;
+    });
+    
+    if (hasErrors) return;
+    
+    if (totalAllocated !== openingStock) {
+        alert(`Total allocated quantity (${totalAllocated}) must match the opening stock quantity (${openingStock}).`);
+        return;
+    }
 
     const columns = state.pipeSchemas[type] || ["Stock"];
-    let initialStock = {};
-    state.godowns.forEach(g => {
-        initialStock[g] = {};
-        columns.forEach(c => { initialStock[g][c] = 0; });
-    });
 
     try {
-        const newPipe = await API.createPipe({ type, size, stock: initialStock });
-        state.pipes.push(newPipe);
-        currentPipeTypeTab = type;
-        renderPipeTabs();
+        if (editingId) {
+            const existingPipe = state.pipes.find(p => (p._id || p.id) === editingId);
+            const stock = syncStockWithAllocations(existingPipe.stock || {}, allocations, columns);
+            
+            const updatedPipe = await API.updatePipe(editingId, { type, size, unit, stock, godownAllocations: allocations });
+            
+            const idx = state.pipes.findIndex(p => (p._id || p.id) === editingId);
+            if (idx !== -1) state.pipes[idx] = updatedPipe;
+            
+            showToast("Pipe details updated successfully.");
+        } else {
+            let initialStock = {};
+            state.godowns.forEach(g => {
+                initialStock[g] = {};
+                columns.forEach((c, idx) => {
+                    const alloc = allocations.find(a => a.godownName === g);
+                    initialStock[g][c] = (idx === 0 && alloc) ? alloc.quantity : 0;
+                });
+            });
+
+            const newPipe = await API.createPipe({ type, size, stock: initialStock, unit, godownAllocations: allocations });
+            state.pipes.push(newPipe);
+            currentPipeTypeTab = type;
+            renderPipeTabs();
+        }
+
         saveState();
         renderPipes();
         closeModal('pipeModal');
         e.target.reset();
+        document.getElementById('editingPipeId').value = '';
     } catch (err) {
-        alert('Error adding pipe: ' + err.message);
+        alert('Error saving pipe: ' + err.message);
     }
 });
 

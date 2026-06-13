@@ -191,21 +191,58 @@ exports.deleteChallan = async (req, res) => {
 
 // --- Helper Functions for Stock Adjustments ---
 
-function parseItemString(itemStr) {
-    if (itemStr.includes(' - ') && itemStr.includes('(') && itemStr.includes(')')) {
-        const parts = itemStr.split(' - ');
-        if (parts.length >= 2) {
-            const type = parts[0].trim();
-            const rest = parts[1].trim();
-            const lastOpenParen = rest.lastIndexOf('(');
-            const lastCloseParen = rest.lastIndexOf(')');
-            if (lastOpenParen !== -1 && lastCloseParen !== -1) {
-                const nameOrSize = rest.substring(0, lastOpenParen).trim();
-                const col = rest.substring(lastOpenParen + 1, lastCloseParen).trim();
-                return { type, nameOrSize, col };
-            }
-        }
+async function parseItemString(itemStr) {
+    if (!itemStr.includes(' - ')) return null;
+    
+    const parts = itemStr.split(' - ');
+    const typeIn = parts[0].trim();
+    const rest = parts[1].trim();
+    
+    let nameOrSize = rest;
+    let col = '';
+    
+    // Try to parse (Col) from end
+    const lastOpenParen = rest.lastIndexOf('(');
+    const lastCloseParen = rest.lastIndexOf(')');
+    if (lastOpenParen !== -1 && lastCloseParen !== -1 && lastCloseParen === rest.length - 1) {
+        nameOrSize = rest.substring(0, lastOpenParen).trim();
+        col = rest.substring(lastOpenParen + 1, lastCloseParen).trim();
     }
+
+    // Try to find matching pipe or fitting
+    const typeRegex = new RegExp(`^${typeIn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( pipes| fittings)?$`, 'i');
+    
+    let product = await Pipe.findOne({ 
+        type: { $regex: typeRegex },
+        $or: [{ size: nameOrSize }, { size: rest }]
+    });
+    let isPipe = true;
+
+    if (!product) {
+        product = await Fitting.findOne({ 
+            type: { $regex: typeRegex },
+            $or: [{ name: nameOrSize.toUpperCase() }, { name: rest.toUpperCase() }]
+        });
+        isPipe = false;
+    }
+
+    if (product) {
+        // If col was missing or incorrect, try to determine it
+        const Model = isPipe ? Pipe : Fitting;
+        // In a real scenario, we might need Settings to get schemas, 
+        // but here we can check the product's stock keys.
+        const stockKeys = product.stock ? Object.values(product.stock).flatMap(s => Object.keys(s)) : [];
+        const uniqueKeys = [...new Set(stockKeys)];
+
+        if (!col || !uniqueKeys.includes(col)) {
+            // Fallback: use first matching key found in string, or first available
+            const foundKey = uniqueKeys.find(k => rest.includes(k));
+            col = foundKey || uniqueKeys[0] || (isPipe ? "Stock" : "Size");
+        }
+
+        return { type: product.type, nameOrSize: isPipe ? product.size : product.name, col, isPipe };
+    }
+
     return null;
 }
 
@@ -351,26 +388,16 @@ const validateStockForChallan = async (challan) => {
             continue;
         }
 
-        const parsed = parseItemString(item.item);
+        const parsed = await parseItemString(item.item);
         if (parsed) {
-            const { type, nameOrSize, col } = parsed;
-            let isPipe = true;
-            let product = await Pipe.findOne({ type, size: nameOrSize });
-            if (!product) {
-                product = await Fitting.findOne({ type, name: nameOrSize.toUpperCase() });
-                isPipe = false;
-            }
-
-            if (!product) {
-                throw new Error(`Product not found: ${item.item}`);
-            }
-
+            const { type, nameOrSize, col, isPipe } = parsed;
+            
             const available = await checkPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col);
             if (available < qty) {
                 throw new Error(`Insufficient Stock for ${item.item} in ${sourceGodown}. Available: ${available}, Requested: ${qty}`);
             }
         } else {
-            throw new Error(`Invalid item format: ${item.item}`);
+            throw new Error(`Invalid item format or product not found: ${item.item}`);
         }
     }
 };
@@ -422,32 +449,24 @@ const adjustStock = async (challan, direction) => {
             continue;
         }
 
-        const parsed = parseItemString(item.item);
+        const parsed = await parseItemString(item.item);
         if (parsed) {
-            const { type, nameOrSize, col } = parsed;
-            let isPipe = true;
-            let product = await Pipe.findOne({ type, size: nameOrSize });
-            if (!product) {
-                product = await Fitting.findOne({ type, name: nameOrSize.toUpperCase() });
-                isPipe = false;
-            }
+            const { type, nameOrSize, col, isPipe } = parsed;
 
-            if (product) {
-                if (challan.type === 'Outward') {
-                    const adjustQty = direction === 1 ? -qty : qty;
-                    await adjustPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col, adjustQty);
-                } else if (challan.type === 'Inward') {
-                    const adjustQty = direction === 1 ? qty : -qty;
-                    await adjustPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col, adjustQty);
-                } else if (challan.type === 'Internal') {
-                    const destGodown = challan.customer || 'Shop';
-                    if (direction === 1) {
-                        await adjustPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col, -qty);
-                        await adjustPipeOrFittingStock(type, isPipe, nameOrSize, destGodown, col, qty);
-                    } else {
-                        await adjustPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col, qty);
-                        await adjustPipeOrFittingStock(type, isPipe, nameOrSize, destGodown, col, -qty);
-                    }
+            if (challan.type === 'Outward') {
+                const adjustQty = direction === 1 ? -qty : qty;
+                await adjustPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col, adjustQty);
+            } else if (challan.type === 'Inward') {
+                const adjustQty = direction === 1 ? qty : -qty;
+                await adjustPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col, adjustQty);
+            } else if (challan.type === 'Internal') {
+                const destGodown = challan.customer || 'Shop';
+                if (direction === 1) {
+                    await adjustPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col, -qty);
+                    await adjustPipeOrFittingStock(type, isPipe, nameOrSize, destGodown, col, qty);
+                } else {
+                    await adjustPipeOrFittingStock(type, isPipe, nameOrSize, sourceGodown, col, qty);
+                    await adjustPipeOrFittingStock(type, isPipe, nameOrSize, destGodown, col, -qty);
                 }
             }
         }

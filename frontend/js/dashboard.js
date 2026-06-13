@@ -128,9 +128,19 @@ function updateDashboard() {
     if (dashPipeBody) {
         dashPipeBody.innerHTML = '';
         state.pipes.forEach(pipe => {
-            const columns = state.pipeSchemas[pipe.type] || [];
+            const columns = state.pipeSchemas[pipe.type] || ["Stock"];
             columns.forEach(col => {
                 const val = getPipeStockVal(pipe, col, currentGodownFilter);
+                
+                // If a specific godown is selected, hide rows with 0 stock to reduce noise
+                if (currentGodownFilter !== 'all' && val === 0) {
+                    // Check if there is an allocation; if so, maybe show it even if 0?
+                    // But usually dashboard should only show what's there.
+                    const gFilter = currentGodownFilter.toLowerCase();
+                    const hasAllocation = pipe.godownAllocations && pipe.godownAllocations.some(a => a.godownName.toLowerCase() === gFilter);
+                    if (!hasAllocation) return;
+                }
+
                 const limit = (pipe.lowStockLimits && pipe.lowStockLimits[col] !== undefined)
                     ? pipe.lowStockLimits[col]
                     : (pipe.lowStockLimit !== undefined ? pipe.lowStockLimit : 20);
@@ -150,9 +160,16 @@ function updateDashboard() {
     if (dashFittingBody) {
         dashFittingBody.innerHTML = '';
         state.fittings.forEach(fitting => {
-            const columns = state.fittingSchemas[fitting.type] || [];
+            const columns = state.fittingSchemas[fitting.type] || ["Size"];
             columns.forEach(col => {
                 const val = getFittingStockVal(fitting, col, currentGodownFilter);
+                
+                if (currentGodownFilter !== 'all' && val === 0) {
+                    const gFilter = currentGodownFilter.toLowerCase();
+                    const hasAllocation = fitting.godownAllocations && fitting.godownAllocations.some(a => a.godownName.toLowerCase() === gFilter);
+                    if (!hasAllocation) return;
+                }
+
                 const limit = (fitting.lowStockLimits && fitting.lowStockLimits[col] !== undefined)
                     ? fitting.lowStockLimits[col]
                     : (fitting.lowStockLimit !== undefined ? fitting.lowStockLimit : 10);
@@ -176,6 +193,7 @@ function updateDashboard() {
                 ? motor.serials
                 : motor.serials.filter(s => s.godown && s.godown.toLowerCase() === currentGodownFilter.toLowerCase());
             const val = activeSerials.length;
+            
             const limit = motor.lowStockLimit !== undefined ? motor.lowStockLimit : 5;
             const unit = motor.unit || "NO'S";
             const tr = document.createElement('tr');
@@ -538,7 +556,7 @@ window.deleteGodown = function (name) {
     if (motorInUse) { alert(`Cannot delete godown "${name}" because it currently has motor serials assigned to it.`); return; }
     if (state.godowns.length <= 1) { alert("You must have at least one godown in the system."); return; }
 
-    if (confirm(`Are you sure you want to delete the godown "${name}"?`)) {
+    confirmDeletion(() => {
         state.godowns = state.godowns.filter(g => g !== name);
         state.pipes.forEach(p => { if (p.stock && p.stock[name]) delete p.stock[name]; });
         state.fittings.forEach(f => { if (f.stock && f.stock[name]) delete f.stock[name]; });
@@ -555,7 +573,7 @@ window.deleteGodown = function (name) {
             renderFittings();
             renderMotors();
         }).catch(err => alert('Error deleting godown: ' + err.message));
-    }
+    }, `Are you sure you want to delete the godown "${name}"?`);
 };
 
 document.getElementById('addGodownForm').addEventListener('submit', async (e) => {

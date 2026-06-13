@@ -59,21 +59,21 @@ const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:5173',
+    'http://localhost:5500',
+    'http://localhost:5501',
     'http://127.0.0.1:5500',
     'http://127.0.0.1:5501',
     'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
         // In development, allow everything to prevent connection issues
-        if (process.env.NODE_ENV !== 'production') {
+        if (process.env.NODE_ENV !== 'production' || !origin) {
             return callback(null, true);
         }
 
-        // Production logic
-        if (!origin) return callback(null, true);
-        
         const isVercel = /\.vercel\.app$/.test(origin);
         const isWhitelisted = allowedOrigins.includes(origin);
 

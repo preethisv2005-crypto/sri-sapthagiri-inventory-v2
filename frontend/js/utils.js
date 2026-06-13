@@ -73,6 +73,30 @@ function switchView(viewId) {
     }
 }
 
+// ─── Deletion Protection ──────────────────────────────────────────────────────
+
+/**
+ * Prompts for a password before executing a deletion action.
+ * @param {Function} callback - The function to run if password is correct.
+ * @param {string} message - Optional confirmation message.
+ */
+window.confirmDeletion = function(callback, message = "Are you sure you want to delete this?") {
+    // First, show the standard confirmation dialog
+    if (!confirm(message)) return;
+
+    // Then, ask for the deletion password
+    const pwd = prompt("Enter Deletion Password to proceed:");
+    
+    // Default deletion password is '1234'
+    const DELETION_PASSWORD = '1234'; 
+
+    if (pwd === DELETION_PASSWORD) {
+        callback();
+    } else if (pwd !== null) {
+        alert("Incorrect Deletion Password. Action cancelled.");
+    }
+};
+
 // ─── Exports ──────────────────────────────────────────────────────────────────
 window.showToast = showToast;
 window.switchView = switchView;
@@ -98,10 +122,9 @@ window.addGodownAllocationRow = function (containerId, initialValue = null, init
     const optionsHtml = godowns.map(g => `<option value="${g}" ${g === defaultVal ? 'selected' : ''}>${g}</option>`).join('');
 
     row.innerHTML = `
-        <select class="godown-select" required style="flex: 2; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;">
+        <select class="godown-select" required style="flex: 1; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;">
             ${optionsHtml}
         </select>
-        <input type="number" class="godown-qty" required min="0" placeholder="Qty" value="${initialQty}" style="flex: 1; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 10px; outline: none; font-size: 0.95rem; color: #0f172a; transition: border-color 0.2s;">
         <button type="button" class="btn-delete-row" style="background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1.1rem; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; transition: var(--transition);">
             <i class="fa-regular fa-trash-can"></i>
         </button>

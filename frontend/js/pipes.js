@@ -87,7 +87,27 @@ function renderPipes() {
     thHtml += `<th style="text-align: center;">Actions</th>`;
     tableHeadRow.innerHTML = thHtml;
 
-    const filteredPipes = state.pipes.filter(p => p.type === currentPipeTypeTab);
+    const filteredPipes = state.pipes.filter(p => {
+        if (p.type !== currentPipeTypeTab) return false;
+        if (currentGodownFilter === 'all') return true;
+        
+        const gFilter = currentGodownFilter.toLowerCase();
+        
+        // Check for non-zero stock in this godown
+        let hasStock = false;
+        if (p.stock) {
+            // Find key in stock that matches currentGodownFilter (case-insensitive)
+            const gKey = Object.keys(p.stock).find(k => k.toLowerCase() === gFilter);
+            if (gKey) {
+                hasStock = Object.values(p.stock[gKey]).some(v => v > 0);
+            }
+        }
+        
+        // Check for allocation for this godown
+        const hasAllocation = p.godownAllocations && p.godownAllocations.some(a => a.godownName.toLowerCase() === gFilter);
+        
+        return hasStock || hasAllocation;
+    });
 
     filteredPipes.forEach(pipe => {
         const tr = document.createElement('tr');
@@ -194,13 +214,14 @@ window.deletePipe = function (id) {
     if (state.currentUser.role !== 'admin') { alert("Only admin users can delete pipes."); return; }
     const pipe = state.pipes.find(p => (p._id || p.id) === id);
     if (!pipe) return;
-    if (confirm(`Are you sure you want to delete the pipe size "${pipe.size}" and all its stock?`)) {
+    
+    confirmDeletion(() => {
         API.deletePipeApi(id).then(() => {
             state.pipes = state.pipes.filter(p => (p._id || p.id) !== id);
             saveState();
             renderPipes();
         }).catch(err => alert('Error deleting pipe: ' + err.message));
-    }
+    }, `Are you sure you want to delete the pipe size "${pipe.size}" and all its stock?`);
 };
 
 // Add event listener for adding godown allocation row
@@ -210,34 +231,21 @@ document.getElementById('addPipeGodownBtn').addEventListener('click', () => {
 
 function syncStockWithAllocations(oldStock, godownAllocations, columns) {
     const stock = { ...oldStock };
+    const allocatedGodownNames = godownAllocations.map(a => a.godownName);
     
-    godownAllocations.forEach(alloc => {
-        const g = alloc.godownName;
-        const targetQty = alloc.quantity;
-        
+    // Ensure all allocated godowns exist in stock
+    allocatedGodownNames.forEach(g => {
         if (!stock[g]) {
             stock[g] = {};
         }
-        
         columns.forEach(col => {
             if (stock[g][col] === undefined) {
                 stock[g][col] = 0;
             }
         });
-        
-        let currentSum = 0;
-        columns.forEach(col => {
-            currentSum += (stock[g][col] || 0);
-        });
-        
-        const diff = targetQty - currentSum;
-        if (diff !== 0) {
-            const firstCol = columns[0] || "Stock";
-            stock[g][firstCol] = Math.max(0, (stock[g][firstCol] || 0) + diff);
-        }
     });
     
-    const allocatedGodownNames = godownAllocations.map(a => a.godownName);
+    // Zero out godowns NOT in the allocation list
     Object.keys(stock).forEach(g => {
         if (!allocatedGodownNames.includes(g)) {
             columns.forEach(col => {
@@ -279,34 +287,29 @@ window.openEditPipeModal = function (id) {
     document.getElementById('pipeSizeInput').value = pipe.size;
     document.getElementById('pipeUnit').value = pipe.unit || "NO'S";
     
-    let totalQty = 0;
     let allocations = [];
     if (pipe.godownAllocations && pipe.godownAllocations.length > 0) {
         allocations = pipe.godownAllocations;
-        allocations.forEach(a => totalQty += a.quantity);
     } else if (pipe.stock) {
         const columns = state.pipeSchemas[pipe.type] || ["Stock"];
         Object.entries(pipe.stock).forEach(([g, cols]) => {
             let sum = 0;
             columns.forEach(col => sum += (cols[col] || 0));
             if (sum > 0) {
-                allocations.push({ godownName: g, quantity: sum });
-                totalQty += sum;
+                allocations.push({ godownName: g });
             }
         });
     }
-    
-    document.getElementById('pipeOpeningStock').value = totalQty;
     
     const container = document.getElementById('pipeGodownAllocationsContainer');
     if (container) {
         container.innerHTML = '';
         if (allocations.length > 0) {
             allocations.forEach(alloc => {
-                addGodownAllocationRow('pipeGodownAllocationsContainer', alloc.godownName, alloc.quantity);
+                addGodownAllocationRow('pipeGodownAllocationsContainer', alloc.godownName);
             });
         } else {
-            addGodownAllocationRow('pipeGodownAllocationsContainer', null, 0);
+            addGodownAllocationRow('pipeGodownAllocationsContainer');
         }
     }
     
@@ -319,29 +322,14 @@ document.getElementById('pipeForm').addEventListener('submit', async (e) => {
     const size = document.getElementById('pipeSizeInput').value.trim();
     const type = document.getElementById('pipeTypeInput').value;
     const unit = document.getElementById('pipeUnit').value;
-    const openingStock = parseInt(document.getElementById('pipeOpeningStock').value, 10) || 0;
 
     const allocations = [];
     const allocationRows = document.querySelectorAll('#pipeGodownAllocationsContainer .godown-allocation-row');
-    let totalAllocated = 0;
     let hasErrors = false;
     const selectedGodowns = [];
     
     allocationRows.forEach(row => {
         const godownName = row.querySelector('.godown-select').value;
-        const qtyStr = row.querySelector('.godown-qty').value.trim();
-        
-        if (qtyStr === '') {
-            alert("Quantity cannot be empty.");
-            hasErrors = true;
-            return;
-        }
-        const qty = parseInt(qtyStr, 10);
-        if (isNaN(qty) || qty < 0) {
-            alert("Quantity cannot be negative.");
-            hasErrors = true;
-            return;
-        }
         
         if (selectedGodowns.includes(godownName)) {
             alert("Duplicate godown selection is not allowed.");
@@ -353,49 +341,44 @@ document.getElementById('pipeForm').addEventListener('submit', async (e) => {
         allocations.push({
             godownId: 'godown-' + Math.random().toString(36).substr(2, 9),
             godownName,
-            quantity: qty
+            quantity: 0
         });
-        totalAllocated += qty;
     });
     
     if (hasErrors) return;
-    
-    if (totalAllocated !== openingStock) {
-        alert(`Total allocated quantity (${totalAllocated}) must match the opening stock quantity (${openingStock}).`);
-        return;
-    }
 
     const columns = state.pipeSchemas[type] || ["Stock"];
 
     try {
         if (editingId) {
-            const existingPipe = state.pipes.find(p => (p._id || p.id) === editingId);
+            const existingPipe = window.state.pipes.find(p => (p._id || p.id) === editingId);
             const stock = syncStockWithAllocations(existingPipe.stock || {}, allocations, columns);
             
             const updatedPipe = await API.updatePipe(editingId, { type, size, unit, stock, godownAllocations: allocations });
             
-            const idx = state.pipes.findIndex(p => (p._id || p.id) === editingId);
-            if (idx !== -1) state.pipes[idx] = updatedPipe;
+            const idx = window.state.pipes.findIndex(p => (p._id || p.id) === editingId);
+            if (idx !== -1) window.state.pipes[idx] = updatedPipe;
             
             showToast("Pipe details updated successfully.");
         } else {
             let initialStock = {};
-            state.godowns.forEach(g => {
+            window.state.godowns.forEach(g => {
                 initialStock[g] = {};
-                columns.forEach((c, idx) => {
-                    const alloc = allocations.find(a => a.godownName === g);
-                    initialStock[g][c] = (idx === 0 && alloc) ? alloc.quantity : 0;
+                columns.forEach(c => {
+                    initialStock[g][c] = 0;
                 });
             });
 
             const newPipe = await API.createPipe({ type, size, stock: initialStock, unit, godownAllocations: allocations });
-            state.pipes.push(newPipe);
+            window.state.pipes.push(newPipe);
             currentPipeTypeTab = type;
-            renderPipeTabs();
+            
+            try { renderPipeTabs(); } catch (e) {}
         }
 
-        saveState();
-        renderPipes();
+        try { saveState(); } catch (e) {}
+        try { renderPipes(); } catch (e) {}
+        
         closeModal('pipeModal');
         e.target.reset();
         document.getElementById('editingPipeId').value = '';
@@ -570,44 +553,47 @@ window.addNewPipeCategoryItem = function () {
 
 document.getElementById('manageCategoriesForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const newSchemas = {};
-    const mapping = {};
-    const categoriesToKeep = new Set();
+    
+    confirmDeletion(async () => {
+        const newSchemas = {};
+        const mapping = {};
+        const categoriesToKeep = new Set();
 
-    e.target.querySelectorAll('.form-group').forEach(fg => {
-        const oldCat = fg.querySelector('input[type="hidden"]').value;
-        const newCat = fg.querySelector('input[type="text"]').value.trim();
-        if (newCat) {
-            categoriesToKeep.add(oldCat);
-            newSchemas[newCat] = state.pipeSchemas[oldCat] || ["Stock"];
-            if (oldCat && oldCat !== newCat) mapping[oldCat] = newCat;
+        e.target.querySelectorAll('.form-group').forEach(fg => {
+            const oldCat = fg.querySelector('input[type="hidden"]').value;
+            const newCat = fg.querySelector('input[type="text"]').value.trim();
+            if (newCat) {
+                categoriesToKeep.add(oldCat);
+                newSchemas[newCat] = state.pipeSchemas[oldCat] || ["Stock"];
+                if (oldCat && oldCat !== newCat) mapping[oldCat] = newCat;
+            }
+        });
+
+        Object.keys(state.pipeSchemas).forEach(oldCat => {
+            if (!categoriesToKeep.has(oldCat)) {
+                state.pipes = state.pipes.filter(p => p.type !== oldCat);
+            }
+        });
+
+        state.pipes.forEach(p => { if (mapping[p.type]) p.type = mapping[p.type]; });
+        state.pipeSchemas = newSchemas;
+
+        if (mapping[currentPipeTypeTab]) currentPipeTypeTab = mapping[currentPipeTypeTab];
+        else if (!newSchemas[currentPipeTypeTab]) {
+            const keys = Object.keys(newSchemas);
+            currentPipeTypeTab = keys.length > 0 ? keys[0] : null;
         }
-    });
 
-    Object.keys(state.pipeSchemas).forEach(oldCat => {
-        if (!categoriesToKeep.has(oldCat)) {
-            state.pipes = state.pipes.filter(p => p.type !== oldCat);
+        try {
+            await API.saveSettings({ pipeSchemas: state.pipeSchemas });
+            saveState();
+            renderPipeTabs();
+            renderPipes();
+            closeModal('manageCategoriesModal');
+        } catch (err) {
+            alert('Error saving categories: ' + err.message);
         }
-    });
-
-    state.pipes.forEach(p => { if (mapping[p.type]) p.type = mapping[p.type]; });
-    state.pipeSchemas = newSchemas;
-
-    if (mapping[currentPipeTypeTab]) currentPipeTypeTab = mapping[currentPipeTypeTab];
-    else if (!newSchemas[currentPipeTypeTab]) {
-        const keys = Object.keys(newSchemas);
-        currentPipeTypeTab = keys.length > 0 ? keys[0] : null;
-    }
-
-    try {
-        await API.saveSettings({ pipeSchemas: state.pipeSchemas });
-        saveState();
-        renderPipeTabs();
-        renderPipes();
-        closeModal('manageCategoriesModal');
-    } catch (err) {
-        alert('Error saving categories: ' + err.message);
-    }
+    }, "Are you sure you want to save these category changes? This may delete items in removed categories.");
 });
 
 // Expose for use in other modules

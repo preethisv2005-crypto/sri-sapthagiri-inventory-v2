@@ -19,7 +19,10 @@ function renderMotors() {
         ? (state.godowns || ['Main Godown', 'Shop', 'Godown 3'])
         : [currentGodownFilter];
 
-    state.motors.forEach(motor => {
+    // Show all motors, but only filter the serials shown within them
+    const activeMotors = state.motors;
+
+    activeMotors.forEach(motor => {
         const card = document.createElement('div');
         card.className = 'motor-card-premium';
         const motorId = motor._id || motor.id;
@@ -147,7 +150,7 @@ window.removeSerial = function (motorId) {
     const exists = motor.serials.find(s => s.sn === trimmedSn);
     if (!exists) { alert(`Serial "${trimmedSn}" not found in this motor's inventory.`); return; }
 
-    if (confirm(`Are you sure you want to remove serial "${trimmedSn}"?`)) {
+    confirmDeletion(() => {
         API.removeMotorSerial(motorId, trimmedSn).then(updated => {
             const idx = state.motors.findIndex(m => (m._id || m.id) === motorId);
             if (idx !== -1) state.motors[idx] = updated;
@@ -155,7 +158,7 @@ window.removeSerial = function (motorId) {
             renderMotors();
             showToast(`Serial ${trimmedSn} removed successfully.`);
         }).catch(err => alert('Error removing serial: ' + err.message));
-    }
+    }, `Are you sure you want to remove serial "${trimmedSn}"?`);
 };
 
 // ─── Form Handlers ────────────────────────────────────────────────────────────
@@ -245,7 +248,8 @@ window.deleteMotor = function (id) {
     if (state.currentUser.role !== 'admin') { alert("Only admin users can delete motors."); return; }
     const motor = state.motors.find(m => (m._id || m.id) === id);
     if (!motor) return;
-    if (confirm(`Are you sure you want to delete the motor spec "${motor.hp} HP ${motor.type} (${motor.phase})" and ALL its serial numbers?`)) {
+    
+    confirmDeletion(() => {
         API.deleteMotorApi(id).then(() => {
             state.motors = state.motors.filter(m => (m._id || m.id) !== id);
             saveState();
@@ -253,7 +257,7 @@ window.deleteMotor = function (id) {
             updateDashboard();
             showToast('Motor spec deleted.');
         }).catch(err => alert('Error deleting motor: ' + err.message));
-    }
+    }, `Are you sure you want to delete the motor spec "${motor.hp} HP ${motor.type} (${motor.phase})" and ALL its serial numbers?`);
 };
 
 // Expose

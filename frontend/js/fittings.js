@@ -86,7 +86,26 @@ function renderFittings() {
     thHtml += `<th style="text-align: center;">Actions</th>`;
     tableHeadRow.innerHTML = thHtml;
 
-    const filteredFittings = state.fittings.filter(f => f.type === currentFittingTypeTab);
+    const filteredFittings = state.fittings.filter(f => {
+        if (f.type !== currentFittingTypeTab) return false;
+        if (currentGodownFilter === 'all') return true;
+        
+        const gFilter = currentGodownFilter.toLowerCase();
+        
+        // Check for non-zero stock in this godown
+        let hasStock = false;
+        if (f.stock) {
+            const gKey = Object.keys(f.stock).find(k => k.toLowerCase() === gFilter);
+            if (gKey) {
+                hasStock = Object.values(f.stock[gKey]).some(v => v > 0);
+            }
+        }
+        
+        // Check for allocation
+        const hasAllocation = f.godownAllocations && f.godownAllocations.some(a => a.godownName.toLowerCase() === gFilter);
+        
+        return hasStock || hasAllocation;
+    });
 
     filteredFittings.forEach(fitting => {
         const tr = document.createElement('tr');
@@ -107,7 +126,7 @@ function renderFittings() {
 
         trHtml += `
             <td style="text-align: center;">
-                <button class="btn-delete-pipe admin-only" onclick="deleteFitting('${fitId}')" title="Delete Fitting"><i class="fa-regular fa-trash-can"></i></button>
+                <button class="btn-delete-fitting admin-only" onclick="deleteFitting('${fitId}')" title="Delete Fitting"><i class="fa-regular fa-trash-can"></i></button>
             </td>
         `;
         tr.innerHTML = trHtml;
@@ -192,13 +211,14 @@ window.deleteFitting = function (id) {
     if (state.currentUser.role !== 'admin') return;
     const fitting = state.fittings.find(f => (f._id || f.id) === id);
     if (!fitting) return;
-    if (confirm(`Are you sure you want to delete the fitting "${fitting.name}" and all its stock?`)) {
+    
+    confirmDeletion(() => {
         API.deleteFittingApi(id).then(() => {
             state.fittings = state.fittings.filter(f => (f._id || f.id) !== id);
             saveState();
             renderFittings();
         }).catch(err => alert('Error deleting fitting: ' + err.message));
-    }
+    }, `Are you sure you want to delete the fitting "${fitting.name}" and all its stock?`);
 };
 
 // Add event listener for adding godown allocation row
@@ -208,34 +228,21 @@ document.getElementById('addFittingGodownBtn')?.addEventListener('click', () => 
 
 function syncStockWithAllocations(oldStock, godownAllocations, columns) {
     const stock = { ...oldStock };
+    const allocatedGodownNames = godownAllocations.map(a => a.godownName);
     
-    godownAllocations.forEach(alloc => {
-        const g = alloc.godownName;
-        const targetQty = alloc.quantity;
-        
+    // Ensure all allocated godowns exist in stock
+    allocatedGodownNames.forEach(g => {
         if (!stock[g]) {
             stock[g] = {};
         }
-        
         columns.forEach(col => {
             if (stock[g][col] === undefined) {
                 stock[g][col] = 0;
             }
         });
-        
-        let currentSum = 0;
-        columns.forEach(col => {
-            currentSum += (stock[g][col] || 0);
-        });
-        
-        const diff = targetQty - currentSum;
-        if (diff !== 0) {
-            const firstCol = columns[0] || "Size";
-            stock[g][firstCol] = Math.max(0, (stock[g][firstCol] || 0) + diff);
-        }
     });
     
-    const allocatedGodownNames = godownAllocations.map(a => a.godownName);
+    // Zero out godowns NOT in the allocation list
     Object.keys(stock).forEach(g => {
         if (!allocatedGodownNames.includes(g)) {
             columns.forEach(col => {
@@ -279,34 +286,29 @@ window.openEditFittingModal = function (id) {
     document.getElementById('fittingLimit').value = fitting.lowStockLimit || 10;
     document.getElementById('fittingUnit').value = fitting.unit || "NO'S";
     
-    let totalQty = 0;
     let allocations = [];
     if (fitting.godownAllocations && fitting.godownAllocations.length > 0) {
         allocations = fitting.godownAllocations;
-        allocations.forEach(a => totalQty += a.quantity);
     } else if (fitting.stock) {
         const columns = state.fittingSchemas[fitting.type] || ["Size"];
         Object.entries(fitting.stock).forEach(([g, cols]) => {
             let sum = 0;
             columns.forEach(col => sum += (cols[col] || 0));
             if (sum > 0) {
-                allocations.push({ godownName: g, quantity: sum });
-                totalQty += sum;
+                allocations.push({ godownName: g });
             }
         });
     }
-    
-    document.getElementById('fittingOpeningStock').value = totalQty;
     
     const container = document.getElementById('fittingGodownAllocationsContainer');
     if (container) {
         container.innerHTML = '';
         if (allocations.length > 0) {
             allocations.forEach(alloc => {
-                addGodownAllocationRow('fittingGodownAllocationsContainer', alloc.godownName, alloc.quantity);
+                addGodownAllocationRow('fittingGodownAllocationsContainer', alloc.godownName);
             });
         } else {
-            addGodownAllocationRow('fittingGodownAllocationsContainer', null, 0);
+            addGodownAllocationRow('fittingGodownAllocationsContainer');
         }
     }
     
@@ -320,29 +322,14 @@ document.getElementById('fittingForm')?.addEventListener('submit', async (e) => 
     const type = document.getElementById('fittingTypeInput').value;
     const limit = parseInt(document.getElementById('fittingLimit').value, 10) || 10;
     const unit = document.getElementById('fittingUnit').value;
-    const openingStock = parseInt(document.getElementById('fittingOpeningStock').value, 10) || 0;
 
     const allocations = [];
     const allocationRows = document.querySelectorAll('#fittingGodownAllocationsContainer .godown-allocation-row');
-    let totalAllocated = 0;
     let hasErrors = false;
     const selectedGodowns = [];
     
     allocationRows.forEach(row => {
         const godownName = row.querySelector('.godown-select').value;
-        const qtyStr = row.querySelector('.godown-qty').value.trim();
-        
-        if (qtyStr === '') {
-            alert("Quantity cannot be empty.");
-            hasErrors = true;
-            return;
-        }
-        const qty = parseInt(qtyStr, 10);
-        if (isNaN(qty) || qty < 0) {
-            alert("Quantity cannot be negative.");
-            hasErrors = true;
-            return;
-        }
         
         if (selectedGodowns.includes(godownName)) {
             alert("Duplicate godown selection is not allowed.");
@@ -354,18 +341,12 @@ document.getElementById('fittingForm')?.addEventListener('submit', async (e) => 
         allocations.push({
             godownId: 'godown-' + Math.random().toString(36).substr(2, 9),
             godownName,
-            quantity: qty
+            quantity: 0
         });
-        totalAllocated += qty;
     });
     
     if (hasErrors) return;
     
-    if (totalAllocated !== openingStock) {
-        alert(`Total allocated quantity (${totalAllocated}) must match the opening stock quantity (${openingStock}).`);
-        return;
-    }
-
     const columns = state.fittingSchemas[type] || ["Size"];
 
     try {
@@ -383,9 +364,8 @@ document.getElementById('fittingForm')?.addEventListener('submit', async (e) => 
             let initialStock = {};
             state.godowns.forEach(g => {
                 initialStock[g] = {};
-                columns.forEach((c, idx) => {
-                    const alloc = allocations.find(a => a.godownName === g);
-                    initialStock[g][c] = (idx === 0 && alloc) ? alloc.quantity : 0;
+                columns.forEach(c => {
+                    initialStock[g][c] = 0;
                 });
             });
 
@@ -395,8 +375,8 @@ document.getElementById('fittingForm')?.addEventListener('submit', async (e) => 
             renderFittingTabs();
         }
 
-        saveState();
-        renderFittings();
+        saveState(); 
+        renderFittings(); 
         closeModal('fittingModal');
         e.target.reset();
         document.getElementById('editingFittingId').value = '';
@@ -571,41 +551,44 @@ window.addNewFittingCategoryItem = function () {
 
 document.getElementById('manageFittingCategoriesForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const newSchemas = {};
-    const mapping = {};
-    const categoriesToKeep = new Set();
+    
+    confirmDeletion(async () => {
+        const newSchemas = {};
+        const mapping = {};
+        const categoriesToKeep = new Set();
 
-    e.target.querySelectorAll('.form-group').forEach(fg => {
-        const oldCat = fg.querySelector('input[type="hidden"]').value;
-        const newCat = fg.querySelector('input[type="text"]').value.trim().toUpperCase();
-        if (newCat) {
-            categoriesToKeep.add(oldCat);
-            newSchemas[newCat] = state.fittingSchemas[oldCat] || ["Size"];
-            if (oldCat && oldCat !== newCat) mapping[oldCat] = newCat;
+        e.target.querySelectorAll('.form-group').forEach(fg => {
+            const oldCat = fg.querySelector('input[type="hidden"]').value;
+            const newCat = fg.querySelector('input[type="text"]').value.trim().toUpperCase();
+            if (newCat) {
+                categoriesToKeep.add(oldCat);
+                newSchemas[newCat] = state.fittingSchemas[oldCat] || ["Size"];
+                if (oldCat && oldCat !== newCat) mapping[oldCat] = newCat;
+            }
+        });
+
+        Object.keys(state.fittingSchemas).forEach(oldCat => {
+            if (!categoriesToKeep.has(oldCat)) state.fittings = state.fittings.filter(f => f.type !== oldCat);
+        });
+        state.fittings.forEach(f => { if (mapping[f.type]) f.type = mapping[f.type]; });
+        state.fittingSchemas = newSchemas;
+
+        if (mapping[currentFittingTypeTab]) currentFittingTypeTab = mapping[currentFittingTypeTab];
+        else if (!newSchemas[currentFittingTypeTab]) {
+            const keys = Object.keys(newSchemas);
+            currentFittingTypeTab = keys.length > 0 ? keys[0] : null;
         }
-    });
 
-    Object.keys(state.fittingSchemas).forEach(oldCat => {
-        if (!categoriesToKeep.has(oldCat)) state.fittings = state.fittings.filter(f => f.type !== oldCat);
-    });
-    state.fittings.forEach(f => { if (mapping[f.type]) f.type = mapping[f.type]; });
-    state.fittingSchemas = newSchemas;
-
-    if (mapping[currentFittingTypeTab]) currentFittingTypeTab = mapping[currentFittingTypeTab];
-    else if (!newSchemas[currentFittingTypeTab]) {
-        const keys = Object.keys(newSchemas);
-        currentFittingTypeTab = keys.length > 0 ? keys[0] : null;
-    }
-
-    try {
-        await API.saveSettings({ fittingSchemas: state.fittingSchemas });
-        saveState();
-        renderFittingTabs();
-        renderFittings();
-        closeModal('manageFittingCategoriesModal');
-    } catch (err) {
-        alert('Error saving fitting categories: ' + err.message);
-    }
+        try {
+            await API.saveSettings({ fittingSchemas: state.fittingSchemas });
+            saveState();
+            renderFittingTabs();
+            renderFittings();
+            closeModal('manageFittingCategoriesModal');
+        } catch (err) {
+            alert('Error saving fitting categories: ' + err.message);
+        }
+    }, "Are you sure you want to save these category changes? This may delete items in removed categories.");
 });
 
 // Expose

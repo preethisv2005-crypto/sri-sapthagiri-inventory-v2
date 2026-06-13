@@ -3,19 +3,6 @@
  * Sri Sapthagiri Logistics Inventory System
  */
 
-let currentChallanTab = 'pendingChallans';
-
-// ─── Challan Tab Switching ────────────────────────────────────────────────────
-
-document.querySelectorAll('#challansView .tab-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        document.querySelectorAll('#challansView .tab-btn').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        currentChallanTab = e.target.getAttribute('data-tab');
-        renderChallans();
-    });
-});
-
 // ─── Challan Modal ────────────────────────────────────────────────────────────
 
 function parseMotorItemString(itemStr) {
@@ -62,6 +49,7 @@ window.validateRowSerialsCount = function (rowEl) {
     const count = checked.length;
     const labelSpan = rowEl.querySelector('.required-serial-count');
     
+    if (!labelSpan) return;
     if (count !== qty) {
         labelSpan.innerHTML = `${qty} <span style="color: var(--danger); font-weight: 700;">(Selected: ${count})</span>`;
     } else {
@@ -70,8 +58,8 @@ window.validateRowSerialsCount = function (rowEl) {
 };
 
 window.loadRowSerials = function (rowEl, preselectedSerials = []) {
-    const categorySelect = rowEl.querySelector('.row-category');
-    if (!categorySelect || categorySelect.value !== 'Motors') {
+    const globalCategory = document.getElementById('challanGlobalCategory')?.value;
+    if (globalCategory !== 'Motors') {
         const serialsContainer = rowEl.querySelector('.row-serials-container');
         if (serialsContainer) serialsContainer.style.display = 'none';
         return;
@@ -107,7 +95,7 @@ window.loadRowSerials = function (rowEl, preselectedSerials = []) {
 
     // Filter available serial numbers
     const availableSerials = motor.serials.filter(s => {
-        const isFromGodown = s.godown && s.godown.toLowerCase() === sourceGodown.toLowerCase();
+        const isFromGodown = s.godown && s.godown.toLowerCase().trim() === sourceGodown.toLowerCase().trim();
         const isAvailable = !s.status || s.status === 'Available';
         const isPreselected = preselectedSerials.includes(s.sn);
         return isFromGodown && (isAvailable || isPreselected);
@@ -116,7 +104,7 @@ window.loadRowSerials = function (rowEl, preselectedSerials = []) {
     if (availableSerials.length === 0) {
         checkboxesDiv.innerHTML = '<span style="color: var(--danger); font-size: 0.85rem;">No available serial numbers in this godown.</span>';
         serialsContainer.style.display = 'block';
-        labelSpan.textContent = qty.toString();
+        if (labelSpan) labelSpan.textContent = qty.toString();
         return;
     }
 
@@ -131,7 +119,7 @@ window.loadRowSerials = function (rowEl, preselectedSerials = []) {
     }).join('');
 
     serialsContainer.style.display = 'block';
-    labelSpan.textContent = qty.toString();
+    if (labelSpan) labelSpan.textContent = qty.toString();
     validateRowSerialsCount(rowEl);
 };
 
@@ -143,31 +131,8 @@ window.addChallanItemRowWithData = function (itemData) {
     row.className = 'challan-item-row';
     row.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; margin-bottom: 0.75rem;';
 
-    let category = '';
-    if (itemData.item.includes(' HP Motor - ')) {
-        category = 'Motors';
-    } else {
-        const parts = itemData.item.split(' - ');
-        if (parts.length >= 2) {
-            const type = parts[0].trim();
-            if (state.pipeSchemas[type]) {
-                category = 'Pipes';
-            } else if (state.fittingSchemas[type]) {
-                category = 'Fittings';
-            }
-        }
-    }
-
     row.innerHTML = `
         <div style="display: flex; gap: 0.75rem; align-items: center;">
-            <div style="width: 180px;">
-                <select class="row-category" required style="width: 100%;" onchange="updateRowProducts(this)">
-                    <option value="">Select Category...</option>
-                    <option value="Pipes" ${category === 'Pipes' ? 'selected' : ''}>Supreme</option>
-                    <option value="Fittings" ${category === 'Fittings' ? 'selected' : ''}>Fittings</option>
-                    <option value="Motors" ${category === 'Motors' ? 'selected' : ''}>CRI</option>
-                </select>
-            </div>
             <div style="flex: 1;">
                 <input type="text" class="row-product" list="productsDatalist" required placeholder="Enter or select product..." value="${itemData.item}" style="width: 100%;" onfocus="updateDatalistOptions(this)">
             </div>
@@ -189,7 +154,6 @@ window.addChallanItemRowWithData = function (itemData) {
 
     const qtyInput = row.querySelector('.row-qty');
     const productInput = row.querySelector('.row-product');
-    const categorySelect = row.querySelector('.row-category');
 
     const preselected = itemData.serial ? itemData.serial.split(',').map(s => s.trim()).filter(Boolean) : [];
 
@@ -201,18 +165,16 @@ window.addChallanItemRowWithData = function (itemData) {
         loadRowSerials(row);
     });
 
-    categorySelect.addEventListener('change', () => {
-        loadRowSerials(row);
-    });
-
-    if (category === 'Motors') {
+    // Check if we need to show serials (only for Motors)
+    const globalCategory = document.getElementById('challanGlobalCategory')?.value;
+    if (globalCategory === 'Motors') {
         loadRowSerials(row, preselected);
     }
 };
 
 window.openNewChallanModal = function (isInternal = false) {
     document.getElementById('editingChallanId').value = '';
-    document.getElementById('challanModalTitle').textContent = 'New Transportation Request';
+    document.getElementById('challanModalTitle').textContent = isInternal ? 'Internal Transportation Request' : 'New Transportation Request';
     
     document.getElementById('challanForm').reset();
     document.getElementById('challanItemsContainer').innerHTML = '';
@@ -240,6 +202,11 @@ window.openNewChallanModal = function (isInternal = false) {
     }
 
     populateGodownDropdowns();
+    // Default global category to nothing
+    if (document.getElementById('challanGlobalCategory')) {
+        document.getElementById('challanGlobalCategory').value = '';
+    }
+
     addChallanItemRow();
     updateDestinationGodownSuggestions();
     openModal('challanModal');
@@ -257,6 +224,21 @@ window.openEditChallanModal = function (id) {
 
     const sourceGodown = document.getElementById('challanSourceGodown');
     if (sourceGodown) sourceGodown.value = ch.sourceGodown || 'Main Godown';
+
+    // Detect category for editing
+    let detectedCategory = 'Pipes'; // default
+    if (ch.items && ch.items.length > 0) {
+        const item0 = ch.items[0].item;
+        if (item0.includes(' HP Motor - ')) {
+            detectedCategory = 'Motors';
+        } else {
+            const typePart = item0.split(' - ')[0].trim();
+            const isFitting = state.fittings.some(f => f.type === typePart || f.type === `${typePart} fittings`);
+            if (isFitting) detectedCategory = 'Fittings';
+        }
+    }
+    const catSelect = document.getElementById('challanGlobalCategory');
+    if (catSelect) catSelect.value = detectedCategory;
 
     if (typeof updateDestinationGodownSuggestions === 'function') {
         updateDestinationGodownSuggestions();
@@ -301,74 +283,92 @@ window.addChallanItemRow = function () {
     addChallanItemRowWithData({ item: '', qty: 1, serial: '' });
 };
 
-window.updateRowProducts = function (selectEl) {
-    const row = selectEl.closest('.challan-item-row');
-    const productInput = row.querySelector('.row-product');
-    if (productInput) productInput.value = '';
-    const serialsContainer = row.querySelector('.row-serials-container');
-    if (serialsContainer) serialsContainer.style.display = 'none';
-};
+// Handle global category change
+document.getElementById('challanGlobalCategory')?.addEventListener('change', () => {
+    // Refresh all rows or at least suggestions
+    const rows = document.querySelectorAll('#challanItemsContainer .challan-item-row');
+    rows.forEach(row => {
+        const productInput = row.querySelector('.row-product');
+        if (productInput) productInput.value = '';
+        const serialsContainer = row.querySelector('.row-serials-container');
+        if (serialsContainer) serialsContainer.style.display = 'none';
+    });
+});
 
 window.updateDatalistOptions = function (inputEl) {
-    const row = inputEl.closest('.challan-item-row');
-    const categorySelect = row.querySelector('.row-category');
-    const category = categorySelect ? categorySelect.value : '';
+    const globalCategory = document.getElementById('challanGlobalCategory')?.value;
+    const sourceGodown = (document.getElementById('challanSourceGodown')?.value || 'Main Godown').toLowerCase().trim();
 
     const datalist = document.getElementById('productsDatalist');
     if (!datalist) return;
     datalist.innerHTML = '';
 
-    if (category === 'Pipes') {
-        const pipeProducts = [];
+    if (!globalCategory) return;
+
+    if (globalCategory === 'Pipes') {
         state.pipes.forEach(pipe => {
             const columns = state.pipeSchemas[pipe.type] || [];
-            columns.forEach(col => pipeProducts.push(`${pipe.type} - ${pipe.size} (${col})`));
+            columns.forEach(col => {
+                const gKey = Object.keys(pipe.stock || {}).find(k => k.toLowerCase().trim() === sourceGodown);
+                const stockObj = gKey ? pipe.stock[gKey] : null;
+                const colKey = stockObj ? Object.keys(stockObj).find(k => k.toLowerCase().trim() === col.toLowerCase().trim()) : null;
+                const available = colKey ? stockObj[colKey] : 0;
+                
+                // ONLY suggest if stock > 0
+                if (available > 0) {
+                    const typeDisplay = pipe.type.replace(/ pipes$/i, '').trim();
+                    let pipeValue = `${typeDisplay} - ${pipe.size}`;
+                    if (col !== 'Stock' && !pipe.size.toLowerCase().includes(col.toLowerCase())) {
+                        pipeValue += ` (${col})`;
+                    }
+                    
+                    const unit = pipe.unit || "NO'S";
+                    const opt = document.createElement('option');
+                    opt.value = pipeValue;
+                    opt.textContent = `Available: ${available} ${unit}`;
+                    datalist.appendChild(opt);
+                }
+            });
         });
-        Array.from(new Set(pipeProducts)).forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p;
-            datalist.appendChild(opt);
-        });
-    }
-    if (category === 'Fittings') {
-        const fittingProducts = [];
+    } else if (globalCategory === 'Fittings') {
         state.fittings.forEach(fitting => {
             const columns = state.fittingSchemas[fitting.type] || [];
-            columns.forEach(col => fittingProducts.push(`${fitting.type} - ${fitting.name} (${col})`));
+            columns.forEach(col => {
+                const gKey = Object.keys(fitting.stock || {}).find(k => k.toLowerCase().trim() === sourceGodown);
+                const stockObj = gKey ? fitting.stock[gKey] : null;
+                const colKey = stockObj ? Object.keys(stockObj).find(k => k.toLowerCase().trim() === col.toLowerCase().trim()) : null;
+                const available = colKey ? stockObj[colKey] : 0;
+
+                // ONLY suggest if stock > 0
+                if (available > 0) {
+                    const typeDisplay = fitting.type.replace(/ fittings$/i, '').trim();
+                    let fittingValue = `${typeDisplay} - ${fitting.name}`;
+                    if (col !== 'Size' && col !== 'Stock' && !fitting.name.toLowerCase().includes(col.toLowerCase())) {
+                        fittingValue += ` (${col})`;
+                    }
+
+                    const unit = fitting.unit || "NO'S";
+                    const opt = document.createElement('option');
+                    opt.value = fittingValue;
+                    opt.textContent = `Available: ${available} ${unit}`;
+                    datalist.appendChild(opt);
+                }
+            });
         });
-        Array.from(new Set(fittingProducts)).forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p;
-            datalist.appendChild(opt);
-        });
-    }
-    if (category === 'Motors' || category === '') {
-        const sourceGodown = document.getElementById('challanSourceGodown')?.value || 'Main Godown';
+    } else if (globalCategory === 'Motors') {
         state.motors.forEach(motor => {
-            const motorValue = `${motor.hp} HP Motor - ${motor.type} (${motor.phase})`;
             const availableSerials = motor.serials ? motor.serials.filter(s => {
-                const isFromGodown = s.godown && s.godown.toLowerCase() === sourceGodown.toLowerCase();
+                const isFromGodown = s.godown && s.godown.toLowerCase().trim() === sourceGodown;
                 const isAvailable = !s.status || s.status === 'Available';
                 return isFromGodown && isAvailable;
             }) : [];
-            const available = availableSerials.length;
-            const motorDisplayName = `${motor.type} ${motor.hp}`;
             
-            if (available > 0) {
-                availableSerials.forEach(serial => {
-                    const opt = document.createElement('option');
-                    opt.value = motorValue;
-                    const labelText = `${motorDisplayName} | Available: ${available} | SN: ${serial.sn}`;
-                    opt.label = labelText;
-                    opt.textContent = labelText;
-                    datalist.appendChild(opt);
-                });
-            } else {
+            // ONLY suggest if there are available serials
+            if (availableSerials.length > 0) {
+                const motorValue = `${motor.hp} HP Motor - ${motor.type} (${motor.phase})`;
                 const opt = document.createElement('option');
                 opt.value = motorValue;
-                const labelText = `${motorDisplayName} | Available: 0 | SN: N/A`;
-                opt.label = labelText;
-                opt.textContent = labelText;
+                opt.textContent = `Available Serials: ${availableSerials.length}`;
                 datalist.appendChild(opt);
             }
         });
@@ -380,35 +380,63 @@ window.updateDatalistOptions = function (inputEl) {
 function getProductStock(itemStr, godownName) {
     if (!itemStr) return 0;
     
-    // Determine the godown to use
-    let godown = godownName;
-    if (!godown) {
-        if (window.currentGodownFilter && window.currentGodownFilter !== 'all') {
-            godown = window.currentGodownFilter;
-        } else {
-            godown = (state.godowns && state.godowns[0]) || 'Main Godown';
-        }
-    }
+    let godown = (godownName || window.currentGodownFilter || 'Main Godown').toLowerCase().trim();
+    if (godown === 'all') godown = (state.godowns && state.godowns[0] ? state.godowns[0].toLowerCase().trim() : 'main godown');
 
-    if (itemStr.includes(' - ') && itemStr.includes('(') && itemStr.includes(')')) {
+    if (itemStr.includes(' - ')) {
         const parts = itemStr.split(' - ');
         if (parts.length >= 2) {
-            const type = parts[0].trim();
+            const typeIn = parts[0].trim();
             const rest = parts[1].trim();
+            
+            let nameOrSize = rest;
+            let col = '';
+            
             const lastOpenParen = rest.lastIndexOf('(');
             const lastCloseParen = rest.lastIndexOf(')');
-            if (lastOpenParen !== -1 && lastCloseParen !== -1) {
-                const size = rest.substring(0, lastOpenParen).trim();
-                const col = rest.substring(lastOpenParen + 1, lastCloseParen).trim();
+            if (lastOpenParen !== -1 && lastCloseParen !== -1 && lastCloseParen === rest.length - 1) {
+                nameOrSize = rest.substring(0, lastOpenParen).trim();
+                col = rest.substring(lastOpenParen + 1, lastCloseParen).trim();
+            }
 
-                const pipe = state.pipes.find(p => p.type === type && p.size === size);
-                if (pipe && pipe.stock && pipe.stock[godown] && pipe.stock[godown][col] !== undefined) {
-                    return pipe.stock[godown][col];
-                }
+            const findItem = (list, isP) => {
+                return list.find(p => {
+                    const matchType = p.type.toLowerCase() === typeIn.toLowerCase() || 
+                                    p.type.toLowerCase() === `${typeIn.toLowerCase()} pipes` || 
+                                    p.type.toLowerCase() === `${typeIn.toLowerCase()} fittings`;
+                    const matchName = isP ? 
+                                    (p.size.toLowerCase() === nameOrSize.toLowerCase() || p.size.toLowerCase() === rest.toLowerCase()) : 
+                                    (p.name.toLowerCase() === nameOrSize.toLowerCase() || p.name.toLowerCase() === rest.toLowerCase());
+                    return matchType && matchName;
+                });
+            };
 
-                const fitting = state.fittings.find(f => f.type === type && f.name === size);
-                if (fitting && fitting.stock && fitting.stock[godown] && fitting.stock[godown][col] !== undefined) {
-                    return fitting.stock[godown][col];
+            let product = findItem(state.pipes, true);
+            let isPipe = true;
+            if (!product) {
+                product = findItem(state.fittings, false);
+                isPipe = false;
+            }
+
+            if (product && product.stock) {
+                const gKey = Object.keys(product.stock).find(k => k.toLowerCase().trim() === godown);
+                if (gKey) {
+                    const stockObj = product.stock[gKey];
+                    if (col) {
+                        const colKey = Object.keys(stockObj).find(k => k.toLowerCase().trim() === col.toLowerCase().trim());
+                        if (colKey) return stockObj[colKey];
+                    }
+                    
+                    const schemas = isPipe ? state.pipeSchemas : state.fittingSchemas;
+                    const cols = schemas[product.type] || (isPipe ? ["Stock"] : ["Size"]);
+                    for (let c of cols) {
+                        if (rest.toLowerCase().includes(c.toLowerCase())) {
+                            const cKey = Object.keys(stockObj).find(k => k.toLowerCase().trim() === c.toLowerCase().trim());
+                            if (cKey) return stockObj[cKey];
+                        }
+                    }
+                    const firstKey = Object.keys(stockObj).find(k => k.toLowerCase().trim() === cols[0]?.toLowerCase().trim());
+                    return firstKey ? stockObj[firstKey] : 0;
                 }
             }
         }
@@ -424,14 +452,17 @@ function getProductStock(itemStr, godownName) {
             if (lastOpenParen !== -1 && lastCloseParen !== -1) {
                 const type = rest.substring(0, lastOpenParen).trim();
                 const phase = rest.substring(lastOpenParen + 1, lastCloseParen).trim();
-                const motor = state.motors.find(m => m.hp === hp && m.type === type && m.phase === phase);
+                const motor = state.motors.find(m => 
+                    m.hp.toLowerCase() === hp.toLowerCase() && 
+                    m.type.toLowerCase() === type.toLowerCase() && 
+                    m.phase.toLowerCase() === phase.toLowerCase()
+                );
                 if (motor && motor.serials) {
-                    return motor.serials.filter(s => s.godown && s.godown.toLowerCase() === godown.toLowerCase()).length;
+                    return motor.serials.filter(s => s.godown && s.godown.toLowerCase().trim() === godown).length;
                 }
             }
         }
     }
-
     return 0;
 }
 
@@ -555,10 +586,8 @@ function renderChallans() {
     const tbody = document.getElementById('challansTableBody');
     tbody.innerHTML = '';
 
-    const filterStatus = currentChallanTab === 'pendingChallans' ? ['pending'] : ['approved', 'rejected'];
-    const filtered = state.challans.filter(c => filterStatus.includes(c.status));
-
-    filtered.forEach(ch => {
+    // Show all challans (no status filtering)
+    state.challans.forEach(ch => {
         const dateParts = ch.date.split('-');
         const formattedDate = dateParts.length === 3
             ? `${parseInt(dateParts[2], 10)}/${parseInt(dateParts[1], 10)}/${dateParts[0]}`
@@ -637,7 +666,8 @@ window.rejectChallan = function (id) {
     const ch = state.challans.find(c => (c._id || c.id) === id);
     if (!ch) return;
     const displayId = ch.challanId || ch.id || ch._id;
-    if (confirm(`Are you sure you want to reject challan ${displayId}?`)) {
+    
+    confirmDeletion(() => {
         API.updateChallan(id, { status: 'rejected' }).then(async (updated) => {
             const idx = state.challans.findIndex(c => (c._id || c.id) === id);
             if (idx !== -1) state.challans[idx] = updated;
@@ -655,14 +685,15 @@ window.rejectChallan = function (id) {
             
             saveState();
         }).catch(err => alert('Error: ' + err.message));
-    }
+    }, `Are you sure you want to reject challan ${displayId}?`);
 };
 
 window.deleteChallan = function (id) {
     const ch = state.challans.find(c => (c._id || c.id) === id);
     if (!ch) return;
     const displayId = ch.challanId || ch.id || ch._id;
-    if (confirm(`Are you sure you want to delete challan ${displayId}?`)) {
+    
+    confirmDeletion(() => {
         API.deleteChallanApi(id).then(async () => {
             state.challans = state.challans.filter(c => (c._id || c.id) !== id);
             
@@ -679,7 +710,7 @@ window.deleteChallan = function (id) {
             
             saveState();
         }).catch(err => alert('Error: ' + err.message));
-    }
+    }, `Are you sure you want to delete challan ${displayId}?`);
 };
 
 // ─── Challan Form Submit ──────────────────────────────────────────────────────
@@ -699,9 +730,11 @@ document.getElementById('challanForm').addEventListener('submit', async (e) => {
 
     const type = document.getElementById('challanType').value;
     const sourceGodown = document.getElementById('challanSourceGodown').value;
+    const globalCategory = document.getElementById('challanGlobalCategory')?.value;
+
+    if (!globalCategory) { alert("Please select a category."); return; }
 
     rows.forEach((row, idx) => {
-        const category = row.querySelector('.row-category').value;
         const productVal = row.querySelector('.row-product').value.trim();
         const qtyVal = row.querySelector('.row-qty').value.trim();
         
@@ -730,7 +763,7 @@ document.getElementById('challanForm').addEventListener('submit', async (e) => {
 
         // Handle serials for Motors
         let serials = '';
-        if (category === 'Motors') {
+        if (globalCategory === 'Motors') {
             const checked = row.querySelectorAll('.serial-checkbox:checked');
             if (checked.length !== qty) {
                 alert(`Please select exactly ${qty} serial numbers for motor ${productVal} (selected: ${checked.length}).`);
@@ -913,6 +946,9 @@ window.updateDestinationGodownSuggestions = function () {
 
 document.getElementById('challanSourceGodown')?.addEventListener('change', () => {
     updateDestinationGodownSuggestions();
+    // Also refresh suggestions if items are already present
+    const inputs = document.querySelectorAll('.row-product');
+    inputs.forEach(inp => updateDatalistOptions(inp));
 });
 
 document.getElementById('challanDestinationGodown')?.addEventListener('focus', () => {

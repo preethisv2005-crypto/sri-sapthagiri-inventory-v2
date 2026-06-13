@@ -141,7 +141,7 @@ async function checkAndTriggerCleanup() {
             `Active stock levels and inventory lists will NOT be modified.\n\n` +
             `Do you want to proceed?`;
             
-        if (confirm(confirmMessage)) {
+        confirmDeletion(async () => {
             const btn = document.getElementById('btnTriggerManualCleanup');
             if (btn) {
                 btn.disabled = true;
@@ -159,7 +159,7 @@ async function checkAndTriggerCleanup() {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fa-solid fa-broom"></i> Delete Old Records';
             }
-        }
+        }, confirmMessage);
     } catch (err) {
         alert("Error during cleanup operation: " + err.message);
         const btn = document.getElementById('btnTriggerManualCleanup');

@@ -55,7 +55,7 @@ project-root/
 | Component | URL |
 |-----------|-----|
 | Frontend  | https://srisapthagirisystems.in |
-| Backend API | https://sapthagiri-api.onrender.com |
+| Backend API | https://sri-sapthagiri-backend.onrender.com |
 | Database | MongoDB Atlas |
 
 ---

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: sapthagiri-api
+    name: sri-sapthagiri-backend
     runtime: node
     rootDir: backend
     buildCommand: npm install

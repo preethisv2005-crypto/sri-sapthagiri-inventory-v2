@@ -23,6 +23,15 @@ function parseMotorItemString(itemStr) {
     return null;
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function getAdjustedProductStock(itemStr, godownName, editingChallanId, rowIdx) {
     let baseStock = getProductStock(itemStr, godownName);
     if (editingChallanId) {
@@ -37,31 +46,19 @@ function getAdjustedProductStock(itemStr, godownName, editingChallanId, rowIdx) 
     return baseStock;
 }
 
-window.updateSerialSelectionStatus = function (checkbox) {
-    const rowEl = checkbox.closest('.challan-item-row');
-    validateRowSerialsCount(rowEl);
-};
-
-window.validateRowSerialsCount = function (rowEl) {
-    const qtyInput = rowEl.querySelector('.row-qty');
-    const qty = parseInt(qtyInput.value, 10) || 0;
-    const checked = rowEl.querySelectorAll('.serial-checkbox:checked');
-    const count = checked.length;
-    const labelSpan = rowEl.querySelector('.required-serial-count');
-    
-    if (!labelSpan) return;
-    if (count !== qty) {
-        labelSpan.innerHTML = `${qty} <span style="color: var(--danger); font-weight: 700;">(Selected: ${count})</span>`;
-    } else {
-        labelSpan.innerHTML = `${qty} <span style="color: var(--success); font-weight: 700;">(Match!)</span>`;
-    }
-};
-
 window.loadRowSerials = function (rowEl, preselectedSerials = []) {
-    const globalCategory = document.getElementById('challanGlobalCategory')?.value;
-    if (globalCategory !== 'Motors') {
-        const serialsContainer = rowEl.querySelector('.row-serials-container');
-        if (serialsContainer) serialsContainer.style.display = 'none';
+    const rowCategory = rowEl.querySelector('.row-category').value;
+    const serialsContainer = rowEl.querySelector('.row-serials-container');
+
+    if (rowCategory !== 'Motors') {
+        if (serialsContainer) {
+            serialsContainer.style.display = 'flex';
+            serialsContainer.innerHTML = `
+                <select class="row-serial-select" disabled>
+                    <option value="">Not required</option>
+                </select>
+            `;
+        }
         return;
     }
 
@@ -70,26 +67,44 @@ window.loadRowSerials = function (rowEl, preselectedSerials = []) {
     const qtyInput = rowEl.querySelector('.row-qty');
     const qty = parseInt(qtyInput.value, 10) || 0;
     
-    const sourceGodown = document.getElementById('challanSourceGodown').value;
-    const serialsContainer = rowEl.querySelector('.row-serials-container');
-    const checkboxesDiv = rowEl.querySelector('.serials-checkboxes');
-    const labelSpan = rowEl.querySelector('.required-serial-count');
+    const sourceGodown = rowEl.querySelector('.row-source').value;
 
     if (!productVal || qty <= 0) {
-        if (serialsContainer) serialsContainer.style.display = 'none';
+        if (serialsContainer) {
+            serialsContainer.style.display = 'block';
+            serialsContainer.innerHTML = `
+                <select class="row-serial-select" disabled>
+                    <option value="">Select product first</option>
+                </select>
+            `;
+        }
         return;
     }
 
     const motorParsed = parseMotorItemString(productVal);
     if (!motorParsed) {
-        if (serialsContainer) serialsContainer.style.display = 'none';
+        if (serialsContainer) {
+            serialsContainer.style.display = 'block';
+            serialsContainer.innerHTML = `
+                <select class="row-serial-select" disabled>
+                    <option value="">Choose a CRI motor</option>
+                </select>
+            `;
+        }
         return;
     }
 
     const { hp, type, phase } = motorParsed;
     const motor = state.motors.find(m => m.hp === hp && m.type === type && m.phase === phase);
     if (!motor) {
-        if (serialsContainer) serialsContainer.style.display = 'none';
+        if (serialsContainer) {
+            serialsContainer.style.display = 'block';
+            serialsContainer.innerHTML = `
+                <select class="row-serial-select" disabled>
+                    <option value="">Motor not found</option>
+                </select>
+            `;
+        }
         return;
     }
 
@@ -102,25 +117,35 @@ window.loadRowSerials = function (rowEl, preselectedSerials = []) {
     });
 
     if (availableSerials.length === 0) {
-        checkboxesDiv.innerHTML = '<span style="color: var(--danger); font-size: 0.85rem;">No available serial numbers in this godown.</span>';
+        serialsContainer.innerHTML = `
+            <select class="row-serial-select" disabled>
+                <option value="">No serials available</option>
+            </select>
+        `;
         serialsContainer.style.display = 'block';
-        if (labelSpan) labelSpan.textContent = qty.toString();
         return;
     }
 
-    checkboxesDiv.innerHTML = availableSerials.map(s => {
-        const isChecked = preselectedSerials.includes(s.sn) ? 'checked' : '';
+    const dropdownCount = Math.max(qty, 1);
+    const selectors = Array.from({ length: dropdownCount }, (_, idx) => {
+        const selectedSerial = preselectedSerials[idx] || '';
+        const options = availableSerials.map(s => {
+            const sn = escapeHtml(s.sn);
+            const isSelected = selectedSerial === s.sn ? 'selected' : '';
+            return `<option value="${sn}" ${isSelected}>${sn}</option>`;
+        }).join('');
+
         return `
-            <label style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.9rem; padding: 0.4rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; background: #f8fafc; user-select: none;">
-                <input type="checkbox" class="serial-checkbox" value="${s.sn}" ${isChecked} onchange="updateSerialSelectionStatus(this)">
-                <span>${s.sn}</span>
-            </label>
+            <select class="row-serial-select" required aria-label="Serial number ${idx + 1}">
+                <option value="">Select serial no.</option>
+                ${options}
+            </select>
         `;
     }).join('');
 
+    serialsContainer.innerHTML = selectors;
+
     serialsContainer.style.display = 'block';
-    if (labelSpan) labelSpan.textContent = qty.toString();
-    validateRowSerialsCount(rowEl);
 };
 
 window.addChallanItemRowWithData = function (itemData) {
@@ -129,47 +154,99 @@ window.addChallanItemRowWithData = function (itemData) {
 
     const row = document.createElement('div');
     row.className = 'challan-item-row';
-    row.style.cssText = 'display: flex; flex-direction: column; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem; margin-bottom: 0.75rem;';
+
+    const godowns = state.godowns || ['Main Godown', 'Shop', 'Godown 3'];
+    const sourceValue = itemData.source || itemData.godown || godowns[0];
+    const sourceOptions = godowns.map(g => `<option value="${escapeHtml(g)}" ${sourceValue === g ? 'selected' : ''}>${escapeHtml(g)}</option>`).join('');
+
+    // Detect category if itemData has item
+    let category = itemData.category || '';
+    if (!category && itemData.item) {
+        if (itemData.item.includes(' HP Motor - ')) category = 'Motors';
+        else {
+            const typePart = itemData.item.split(' - ')[0].trim();
+            const isFitting = state.fittings.some(f => f.type === typePart || f.type === `${typePart} fittings`);
+            category = isFitting ? 'Fittings' : 'Pipes';
+        }
+    }
 
     row.innerHTML = `
-        <div style="display: flex; gap: 0.75rem; align-items: center;">
-            <div style="flex: 1;">
-                <input type="text" class="row-product" list="productsDatalist" required placeholder="Enter or select product..." value="${itemData.item}" style="width: 100%;" onfocus="updateDatalistOptions(this)">
+        <div class="challan-item-grid ${category === 'Motors' ? 'has-serial' : ''}">
+            <div class="challan-row-field challan-source-field">
+                <select class="row-source" required>
+                    ${sourceOptions}
+                </select>
             </div>
-            <div style="width: 80px;">
-                <input type="number" class="row-qty" min="1" value="${itemData.qty}" required style="width: 100%;">
+            <div class="challan-row-field challan-category-field">
+                <select class="row-category" required>
+                    <option value="">Category...</option>
+                    <option value="Pipes" ${category === 'Pipes' ? 'selected' : ''}>Supreme(pipes)</option>
+                    <option value="Fittings" ${category === 'Fittings' ? 'selected' : ''}>Supreme(Fitting)</option>
+                    <option value="Motors" ${category === 'Motors' ? 'selected' : ''}>CRI(Motors)</option>
+                </select>
+            </div>
+            <div class="challan-row-field challan-product-field">
+                <input type="text" class="row-product" list="productsDatalist" required placeholder="Product..." value="${escapeHtml(itemData.item)}" onfocus="updateDatalistOptions(this)">
+            </div>
+            <div class="challan-row-field challan-serial-field row-serials-container">
+                <select class="row-serial-select" disabled>
+                    <option value="">Select motor first</option>
+                </select>
+            </div>
+            <div class="challan-row-field challan-qty-field">
+                <input type="number" class="row-qty" min="1" value="${itemData.qty}" required>
             </div>
             <button type="button" class="btn-delete-row" onclick="this.closest('.challan-item-row').remove();" title="Remove Product">
                 <i class="fa-regular fa-trash-can"></i>
             </button>
-        </div>
-        <div class="row-serials-container" style="display: none; padding-left: 1rem;">
-            <label style="font-size: 0.8rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem; display: block;">Select Serial Numbers (Select <span class="required-serial-count">1</span>):</label>
-            <div class="serials-checkboxes" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                <!-- Loaded dynamically -->
-            </div>
         </div>
     `;
     container.appendChild(row);
 
     const qtyInput = row.querySelector('.row-qty');
     const productInput = row.querySelector('.row-product');
+    const categorySelect = row.querySelector('.row-category');
+    const sourceSelect = row.querySelector('.row-source');
 
     const preselected = itemData.serial ? itemData.serial.split(',').map(s => s.trim()).filter(Boolean) : [];
 
-    qtyInput.addEventListener('input', () => {
-        loadRowSerials(row);
+    const refreshSerials = () => {
+        const grid = row.querySelector('.challan-item-grid');
+        if (categorySelect.value === 'Motors') {
+            const currentSelectedSerials = Array.from(row.querySelectorAll('.row-serial-select'))
+                .map(select => select.value)
+                .filter(Boolean);
+            if (grid) grid.classList.add('has-serial');
+            loadRowSerials(row, currentSelectedSerials.length ? currentSelectedSerials : preselected);
+        } else {
+            const serialsContainer = row.querySelector('.row-serials-container');
+            if (grid) grid.classList.remove('has-serial');
+            if (serialsContainer) {
+                serialsContainer.style.display = 'flex';
+                serialsContainer.innerHTML = `
+                    <select class="row-serial-select" disabled>
+                        <option value="">Not required</option>
+                    </select>
+                `;
+            }
+        }
+    };
+
+    qtyInput.addEventListener('input', refreshSerials);
+    productInput.addEventListener('input', refreshSerials);
+    categorySelect.addEventListener('change', () => {
+        productInput.value = '';
+        refreshSerials();
+    });
+    sourceSelect.addEventListener('change', () => {
+        refreshSerials();
+        if (typeof updateDestinationGodownSuggestions === 'function') {
+            updateDestinationGodownSuggestions();
+        }
     });
 
-    productInput.addEventListener('input', () => {
-        loadRowSerials(row);
-    });
-
-    // Check if we need to show serials (only for Motors)
-    const globalCategory = document.getElementById('challanGlobalCategory')?.value;
-    if (globalCategory === 'Motors') {
-        loadRowSerials(row, preselected);
-    }
+    // Initial load
+    refreshSerials();
 };
 
 window.openNewChallanModal = function (isInternal = false) {
@@ -201,12 +278,6 @@ window.openNewChallanModal = function (isInternal = false) {
         typeInput.value = isInternal ? 'Internal' : 'Outward';
     }
 
-    populateGodownDropdowns();
-    // Default global category to nothing
-    if (document.getElementById('challanGlobalCategory')) {
-        document.getElementById('challanGlobalCategory').value = '';
-    }
-
     addChallanItemRow();
     updateDestinationGodownSuggestions();
     openModal('challanModal');
@@ -221,24 +292,6 @@ window.openEditChallanModal = function (id) {
     
     const typeInput = document.getElementById('challanType');
     if (typeInput) typeInput.value = ch.type || 'Outward';
-
-    const sourceGodown = document.getElementById('challanSourceGodown');
-    if (sourceGodown) sourceGodown.value = ch.sourceGodown || 'Main Godown';
-
-    // Detect category for editing
-    let detectedCategory = 'Pipes'; // default
-    if (ch.items && ch.items.length > 0) {
-        const item0 = ch.items[0].item;
-        if (item0.includes(' HP Motor - ')) {
-            detectedCategory = 'Motors';
-        } else {
-            const typePart = item0.split(' - ')[0].trim();
-            const isFitting = state.fittings.some(f => f.type === typePart || f.type === `${typePart} fittings`);
-            if (isFitting) detectedCategory = 'Fittings';
-        }
-    }
-    const catSelect = document.getElementById('challanGlobalCategory');
-    if (catSelect) catSelect.value = detectedCategory;
 
     if (typeof updateDestinationGodownSuggestions === 'function') {
         updateDestinationGodownSuggestions();
@@ -266,13 +319,15 @@ window.openEditChallanModal = function (id) {
 
     if (ch.items && ch.items.length > 0) {
         ch.items.forEach(item => {
+            if (!item.source) item.source = ch.sourceGodown;
             addChallanItemRowWithData(item);
         });
     } else if (ch.item) {
         addChallanItemRowWithData({
             item: ch.item,
             qty: ch.qty,
-            serial: ch.serial
+            serial: ch.serial,
+            source: ch.sourceGodown
         });
     }
 
@@ -280,32 +335,24 @@ window.openEditChallanModal = function (id) {
 };
 
 window.addChallanItemRow = function () {
-    addChallanItemRowWithData({ item: '', qty: 1, serial: '' });
+    const godowns = state.godowns || ['Main Godown', 'Shop', 'Godown 3'];
+    addChallanItemRowWithData({ item: '', qty: 1, serial: '', source: godowns[0] });
 };
 
-// Handle global category change
-document.getElementById('challanGlobalCategory')?.addEventListener('change', () => {
-    // Refresh all rows or at least suggestions
-    const rows = document.querySelectorAll('#challanItemsContainer .challan-item-row');
-    rows.forEach(row => {
-        const productInput = row.querySelector('.row-product');
-        if (productInput) productInput.value = '';
-        const serialsContainer = row.querySelector('.row-serials-container');
-        if (serialsContainer) serialsContainer.style.display = 'none';
-    });
-});
+// Removed global category change listener
 
 window.updateDatalistOptions = function (inputEl) {
-    const globalCategory = document.getElementById('challanGlobalCategory')?.value;
-    const sourceGodown = (document.getElementById('challanSourceGodown')?.value || 'Main Godown').toLowerCase().trim();
+    const rowEl = inputEl.closest('.challan-item-row');
+    const rowCategory = rowEl.querySelector('.row-category').value;
+    const sourceGodown = (rowEl.querySelector('.row-source').value || 'Main Godown').toLowerCase().trim();
 
     const datalist = document.getElementById('productsDatalist');
     if (!datalist) return;
     datalist.innerHTML = '';
 
-    if (!globalCategory) return;
+    if (!rowCategory) return;
 
-    if (globalCategory === 'Pipes') {
+    if (rowCategory === 'Pipes') {
         state.pipes.forEach(pipe => {
             const columns = state.pipeSchemas[pipe.type] || [];
             columns.forEach(col => {
@@ -322,15 +369,14 @@ window.updateDatalistOptions = function (inputEl) {
                         pipeValue += ` (${col})`;
                     }
                     
-                    const unit = pipe.unit || "NO'S";
                     const opt = document.createElement('option');
                     opt.value = pipeValue;
-                    opt.textContent = `Available: ${available} ${unit}`;
+                    opt.textContent = `Available NO'S: ${available}`;
                     datalist.appendChild(opt);
                 }
             });
         });
-    } else if (globalCategory === 'Fittings') {
+    } else if (rowCategory === 'Fittings') {
         state.fittings.forEach(fitting => {
             const columns = state.fittingSchemas[fitting.type] || [];
             columns.forEach(col => {
@@ -347,15 +393,14 @@ window.updateDatalistOptions = function (inputEl) {
                         fittingValue += ` (${col})`;
                     }
 
-                    const unit = fitting.unit || "NO'S";
                     const opt = document.createElement('option');
                     opt.value = fittingValue;
-                    opt.textContent = `Available: ${available} ${unit}`;
+                    opt.textContent = `Available NO'S: ${available}`;
                     datalist.appendChild(opt);
                 }
             });
         });
-    } else if (globalCategory === 'Motors') {
+    } else if (rowCategory === 'Motors') {
         state.motors.forEach(motor => {
             const availableSerials = motor.serials ? motor.serials.filter(s => {
                 const isFromGodown = s.godown && s.godown.toLowerCase().trim() === sourceGodown;
@@ -729,55 +774,67 @@ document.getElementById('challanForm').addEventListener('submit', async (e) => {
     let hasSerialError = false;
 
     const type = document.getElementById('challanType').value;
-    const sourceGodown = document.getElementById('challanSourceGodown').value;
-    const globalCategory = document.getElementById('challanGlobalCategory')?.value;
-
-    if (!globalCategory) { alert("Please select a category."); return; }
 
     rows.forEach((row, idx) => {
         const productVal = row.querySelector('.row-product').value.trim();
         const qtyVal = row.querySelector('.row-qty').value.trim();
+        const rowSource = row.querySelector('.row-source').value;
+        const rowCategory = row.querySelector('.row-category').value;
         
+        if (!rowCategory) { alert(`Please select a category for item ${idx + 1}.`); hasSerialError = true; return; }
         if (!productVal) { hasEmptyProduct = true; return; }
         if (!qtyVal) { 
-            alert("Quantity cannot be empty.");
+            alert(`Quantity cannot be empty for row ${idx + 1}.`);
             hasSerialError = true;
             return;
         }
         const qty = parseInt(qtyVal, 10);
         if (isNaN(qty) || qty <= 0) {
-            alert("Quantity must be a positive number.");
+            alert(`Quantity must be a positive number for row ${idx + 1}.`);
             hasSerialError = true;
             return;
         }
 
         // Validate stock if Outward or Internal
         if (type !== 'Inward') {
-            const avail = getAdjustedProductStock(productVal, sourceGodown, editingId, idx);
+            const avail = getAdjustedProductStock(productVal, rowSource, editingId, idx);
             if (qty > avail) {
                 hasStockError = true;
-                errorMsg = `Insufficient Stock for ${productVal} in ${sourceGodown}. Available: ${avail}, Requested: ${qty}`;
+                errorMsg = `Insufficient Stock for ${productVal} in ${rowSource}. Available: ${avail}, Requested: ${qty}`;
                 return;
             }
         }
 
         // Handle serials for Motors
         let serials = '';
-        if (globalCategory === 'Motors') {
-            const checked = row.querySelectorAll('.serial-checkbox:checked');
-            if (checked.length !== qty) {
-                alert(`Please select exactly ${qty} serial numbers for motor ${productVal} (selected: ${checked.length}).`);
+        if (rowCategory === 'Motors') {
+            const serialSelects = Array.from(row.querySelectorAll('.row-serial-select'));
+            const selectedSerials = serialSelects.map(select => select.value).filter(Boolean);
+            const uniqueSerials = new Set(selectedSerials);
+
+            if (selectedSerials.length !== qty) {
+                alert(`Please select exactly ${qty} serial number${qty === 1 ? '' : 's'} for motor ${productVal} (selected: ${selectedSerials.length}).`);
                 hasSerialError = true;
                 return;
             }
-            serials = Array.from(checked).map(cb => cb.value).join(', ');
+
+            if (uniqueSerials.size !== selectedSerials.length) {
+                alert(`Please do not select the same serial number twice for motor ${productVal}.`);
+                hasSerialError = true;
+                return;
+            }
+
+            serials = selectedSerials.join(', ');
         }
 
         items.push({
             sno: (idx + 1).toString(),
             item: productVal,
             serial: serials,
-            qty: qty
+            qty: qty,
+            source: rowSource,
+            godown: rowSource, // Kept for backend approval/source compatibility
+            category: rowCategory
         });
     });
 
@@ -789,29 +846,27 @@ document.getElementById('challanForm').addEventListener('submit', async (e) => {
         ? document.getElementById('challanDestinationGodown').value
         : document.getElementById('challanCustomerName').value.trim();
 
-    if (type === 'Internal' && sourceGodown === customerValue) {
+    // Primary source for legacy/header display
+    const mainSource = items[0].source || items[0].godown;
+
+    if (type === 'Internal' && mainSource === customerValue) {
         alert("Source and Destination Godown cannot be the same.");
         return;
     }
 
     try {
-
         if (editingId) {
-            // Update existing Challan
-            const updatedChallan = await API.updateChallan(editingId, {
+            await API.updateChallan(editingId, {
                 customer: customerValue,
-                sourceGodown: sourceGodown,
+                sourceGodown: mainSource,
                 items,
                 type: type
             });
-            const idx = state.challans.findIndex(c => (c._id || c.id) === editingId);
-            if (idx !== -1) state.challans[idx] = updatedChallan;
             alert("Challan updated successfully.");
         } else {
-            // Create new Challan
             const newChallan = await API.createChallan({
                 customer: customerValue,
-                sourceGodown: sourceGodown,
+                sourceGodown: mainSource,
                 items,
                 createdBy: state.currentUser.username,
                 type: type,
@@ -821,10 +876,7 @@ document.getElementById('challanForm').addEventListener('submit', async (e) => {
             alert("Challan created successfully.");
         }
 
-        // Full reload of data from backend to ensure all inventory/dashboard/reports sync
-        if (window.loadDataFromBackend) {
-            await window.loadDataFromBackend();
-        }
+        if (window.loadDataFromBackend) await window.loadDataFromBackend();
         
         if (window.populateGodownDropdowns) window.populateGodownDropdowns();
         if (window.renderPipes) window.renderPipes();
@@ -937,19 +989,17 @@ window.updateDestinationGodownSuggestions = function () {
     if (!destGodownSelect) return;
     destGodownSelect.innerHTML = '';
     if (isInternal) {
-        const sourceGodown = document.getElementById('challanSourceGodown')?.value;
+        // Use source from first row if available
+        const firstRowSource = document.querySelector('#challanItemsContainer .row-source');
+        const sourceGodown = firstRowSource ? firstRowSource.value : (state.godowns[0] || 'Main Godown');
+        
         const godownsList = state.godowns || ['Main Godown', 'Shop', 'Godown 3'];
         const suggestions = godownsList.filter(g => g !== sourceGodown);
         destGodownSelect.innerHTML = suggestions.map(g => `<option value="${g}">${g}</option>`).join('');
     }
 };
 
-document.getElementById('challanSourceGodown')?.addEventListener('change', () => {
-    updateDestinationGodownSuggestions();
-    // Also refresh suggestions if items are already present
-    const inputs = document.querySelectorAll('.row-product');
-    inputs.forEach(inp => updateDatalistOptions(inp));
-});
+// Removed stale event listeners for challanSourceGodown
 
 document.getElementById('challanDestinationGodown')?.addEventListener('focus', () => {
     updateDestinationGodownSuggestions();

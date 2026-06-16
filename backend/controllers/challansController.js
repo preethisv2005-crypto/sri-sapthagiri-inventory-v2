@@ -59,16 +59,16 @@ exports.createChallan = async (req, res) => {
             status: 'pending'
         });
 
-        // Validate stock before saving
+        // Validate stock before saving (check if requested quantity exists)
         await validateStockForChallan(challan);
 
         await challan.save();
-        await adjustStock(challan, 1);
+        // REMOVED: await adjustStock(challan, 1); // No deduction on creation
 
         // Audit Logging
         await logActivity(
             'CREATE_CHALLAN',
-            `Created ${challan.type} Challan ${challan.challanId} for ${challan.customer} with ${challan.items.length} items.`,
+            `Created ${challan.type} Challan ${challan.challanId} for ${challan.customer} with ${challan.items.length} items. (Status: Pending)`,
             createdBy || 'admin'
         );
 
@@ -88,7 +88,8 @@ exports.updateChallan = async (req, res) => {
         const oldChallan = await Challan.findById(req.params.id);
         if (!oldChallan) return res.status(404).json({ message: 'Challan not found' });
 
-        const isRejectTransition = req.body.status === 'rejected' && oldChallan.status !== 'rejected';
+        const isApproveTransition = req.body.status === 'approved' && oldChallan.status !== 'approved';
+        const isRejectTransition = req.body.status === 'rejected' && oldChallan.status === 'approved';
 
         // Construct temporary updated challan data in memory for validation
         const updatedChallanData = {
@@ -97,7 +98,7 @@ exports.updateChallan = async (req, res) => {
         };
 
         if (isRejectTransition) {
-            // Restore stock (cancel deductions) and save
+            // Restore stock only if it was previously approved (deducted)
             await adjustStock(oldChallan, -1);
             const challan = await Challan.findByIdAndUpdate(
                 req.params.id,
@@ -106,39 +107,35 @@ exports.updateChallan = async (req, res) => {
             );
             await logActivity(
                 'REJECT_CHALLAN',
-                `Rejected/Cancelled Challan ${challan.challanId} (Party: ${challan.customer}).`,
+                `Rejected/Cancelled Approved Challan ${challan.challanId}. Stock restored.`,
                 performedBy
             );
             return res.json(challan);
         }
 
-        // For item edits, or status transition out of 'rejected':
-        // Restore old stock deductions first (if old status was not already rejected)
-        const oldStockWasDeducted = oldChallan.status !== 'rejected';
-        if (oldStockWasDeducted) {
-            await adjustStock(oldChallan, -1);
+        // If it's an approval or an update to an already approved challan
+        const wasApproved = oldChallan.status === 'approved';
+        if (wasApproved) {
+            await adjustStock(oldChallan, -1); // Temporarily restore to validate new changes
         }
 
         try {
-            // Validate updated challan stock
             await validateStockForChallan(updatedChallanData);
         } catch (validationErr) {
-            // If validation failed, roll back stock restoration (re-deduct old stock)
-            if (oldStockWasDeducted) {
-                await adjustStock(oldChallan, 1);
+            if (wasApproved) {
+                await adjustStock(oldChallan, 1); // Re-deduct if validation fails
             }
             return res.status(400).json({ message: validationErr.message });
         }
 
-        // Validation passed! Save the update
         const challan = await Challan.findByIdAndUpdate(
             req.params.id,
             { $set: req.body },
             { new: true, runValidators: true }
         );
 
-        // Apply new stock deductions if not rejected
-        if (challan.status !== 'rejected') {
+        // Deduct stock only if status IS approved
+        if (challan.status === 'approved') {
             await adjustStock(challan, 1);
         }
 
@@ -168,13 +165,15 @@ exports.updateChallan = async (req, res) => {
 exports.deleteChallan = async (req, res) => {
     try {
         const performedBy = req.headers['x-user-role'] || 'admin';
-        const challan = await Challan.findByIdAndDelete(req.params.id);
+        const challan = await Challan.findById(req.params.id);
         if (!challan) return res.status(404).json({ message: 'Challan not found' });
 
-        // Restore stock levels if they were deducted (not rejected)
-        if (challan.status !== 'rejected') {
+        // Restore stock levels ONLY if it was approved (deducted)
+        if (challan.status === 'approved') {
             await adjustStock(challan, -1);
         }
+
+        await Challan.findByIdAndDelete(req.params.id);
 
         // Audit Logging
         await logActivity(
@@ -364,8 +363,11 @@ const validateStockForChallan = async (challan) => {
 
     for (const item of challan.items) {
         const qty = item.qty || 0;
-        const selectedGodowns = item.godown 
-            ? item.godown.split(',').map(s => s.trim()).filter(Boolean) 
+        
+        // Support both 'godown' and 'source' fields for row-specific source
+        const rowSource = item.source || item.godown;
+        const selectedGodowns = rowSource
+            ? rowSource.split(',').map(s => s.trim()).filter(Boolean) 
             : [challan.sourceGodown];
         const sourceGodown = selectedGodowns[0] || challan.sourceGodown || 'Main Godown';
 
@@ -407,8 +409,11 @@ const adjustStock = async (challan, direction) => {
 
     for (const item of challan.items) {
         const qty = item.qty || 0;
-        const selectedGodowns = item.godown 
-            ? item.godown.split(',').map(s => s.trim()).filter(Boolean) 
+        
+        // Support both 'godown' and 'source' fields for row-specific source
+        const rowSource = item.source || item.godown;
+        const selectedGodowns = rowSource
+            ? rowSource.split(',').map(s => s.trim()).filter(Boolean) 
             : [challan.sourceGodown];
         const sourceGodown = selectedGodowns[0] || challan.sourceGodown || 'Main Godown';
 

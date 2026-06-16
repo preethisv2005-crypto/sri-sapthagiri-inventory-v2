@@ -270,7 +270,9 @@ window.populateGodownDropdowns = function () {
     if (newMotorGodown) newMotorGodown.innerHTML = godowns.map(g => `<option value="${g}">${g}</option>`).join('');
 
     const challanSourceGodown = document.getElementById('challanSourceGodown');
-    if (challanSourceGodown) challanSourceGodown.innerHTML = godowns.map(g => `<option value="${g}">${g}</option>`).join('');
+    if (challanSourceGodown) {
+        challanSourceGodown.innerHTML = godowns.map(g => `<option value="${g}">${g}</option>`).join('');
+    }
 };
 
 // ─── App Init ─────────────────────────────────────────────────────────────────

@@ -1439,7 +1439,7 @@
 
     <!-- Challan Modal -->
     <div class="modal-overlay" id="challanModal">
-        <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-content" style="max-width: 1100px;">
             <div class="modal-header">
                 <h3 id="challanModalTitle">New Transportation Request</h3>
                 <button class="close-modal-btn" onclick="closeModal('challanModal')"><i
@@ -1451,37 +1451,22 @@
                     <input type="hidden" id="challanType" value="Outward">
                     <input type="hidden" id="editingChallanId" value="">
 
-                    <!-- Global Selectors (Godown & Category) at the TOP -->
-                    <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                        <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.4rem;">Source Godown</label>
-                            <select id="challanSourceGodown" required style="width: 100%;">
-                                <!-- Populated dynamically by JS -->
-                            </select>
-                        </div>
-                        <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.4rem;">Select Category</label>
-                            <select id="challanGlobalCategory" required style="width: 100%;">
-                                <option value="">Select Category...</option>
-                                <option value="Pipes">Supreme(pipes)</option>
-                                <option value="Fittings">Supreme(Fitting)</option>
-                                <option value="Motors">CRI(Motors)</option>
-                            </select>
-                        </div>
-                    </div>
+                    <!-- Removed Global Selectors (Godown & Category) from here -->
 
                     <div class="form-group">
-                        <!-- Labels Header (Removed Category column) -->
-                        <div style="display: flex; gap: 1rem; margin-bottom: 0.25rem; padding-right: 58px;">
-                            <div style="flex: 1;"><label
-                                    style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Product</label></div>
-                            <div style="width: 80px;"><label
-                                    style="font-size: 0.85rem; font-weight: 600; color: #64748b;">Qty</label></div>
+                        <!-- Labels Header -->
+                        <div class="challan-items-header">
+                            <div>Source</div>
+                            <div>Category</div>
+                            <div>Product</div>
+                            <div>Serial No.</div>
+                            <div>Qty</div>
+                            <div></div>
                         </div>
 
                         <!-- Rows container -->
                         <div id="challanItemsContainer"
-                            style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 250px; overflow-y: auto; margin-bottom: 0.5rem; padding-right: 4px;">
+                            style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 350px; overflow: auto; margin-bottom: 0.5rem; padding-right: 4px;">
                             <!-- Populated by JS -->
                         </div>
 

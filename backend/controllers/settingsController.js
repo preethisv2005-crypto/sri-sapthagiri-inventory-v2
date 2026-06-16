@@ -28,21 +28,48 @@ const DEFAULT_DATA_RETENTION = {
     retentionOption: 'permanent' // 'permanent' or 'auto-delete'
 };
 
-// GET /api/settings - Returns pipeSchemas, fittingSchemas, godowns, dataRetention
+const DEFAULT_AGENCY_PROFILE = {
+    agencyName: 'Sri Sapthagiri Logistics',
+    adminName: 'Administrator',
+    address: '',
+    email: '',
+    phone: ''
+};
+
+const DEFAULT_SECURITY_SETTINGS = {
+    adminPassword: '12345678',
+    deleteIconPassword: '1234'
+};
+
+const getAgencyProfileValue = async () => {
+    const doc = await Settings.findOne({ key: 'agencyProfile' });
+    return { ...DEFAULT_AGENCY_PROFILE, ...(doc ? doc.value : {}) };
+};
+
+const getSecuritySettingsValue = async () => {
+    const doc = await Settings.findOne({ key: 'securitySettings' });
+    return { ...DEFAULT_SECURITY_SETTINGS, ...(doc ? doc.value : {}) };
+};
+
+// GET /api/settings - Returns pipeSchemas, fittingSchemas, godowns, dataRetention, agencyProfile, securitySettings
 exports.getSettings = async (req, res) => {
     try {
-        const [pipeSchemaDoc, fittingSchemaDoc, godownsDoc, dataRetentionDoc] = await Promise.all([
+        const [pipeSchemaDoc, fittingSchemaDoc, godownsDoc, dataRetentionDoc, agencyProfileDoc, securitySettingsDoc] = await Promise.all([
             Settings.findOne({ key: 'pipeSchemas' }),
             Settings.findOne({ key: 'fittingSchemas' }),
             Settings.findOne({ key: 'godowns' }),
-            Settings.findOne({ key: 'dataRetention' })
+            Settings.findOne({ key: 'dataRetention' }),
+            Settings.findOne({ key: 'agencyProfile' }),
+            Settings.findOne({ key: 'securitySettings' })
         ]);
 
         res.json({
             pipeSchemas: pipeSchemaDoc ? pipeSchemaDoc.value : DEFAULT_PIPE_SCHEMAS,
             fittingSchemas: fittingSchemaDoc ? fittingSchemaDoc.value : DEFAULT_FITTING_SCHEMAS,
             godowns: godownsDoc ? godownsDoc.value : DEFAULT_GODOWNS,
-            dataRetention: dataRetentionDoc ? dataRetentionDoc.value : DEFAULT_DATA_RETENTION
+            dataRetention: dataRetentionDoc ? dataRetentionDoc.value : DEFAULT_DATA_RETENTION,
+            agencyProfile: { ...DEFAULT_AGENCY_PROFILE, ...(agencyProfileDoc ? agencyProfileDoc.value : {}) },
+            securitySettings: { ...DEFAULT_SECURITY_SETTINGS, ...(securitySettingsDoc ? securitySettingsDoc.value : {}) }
         });
     } catch (err) {
         res.status(500).json({ message: 'Server Error', error: err.message });
@@ -52,7 +79,7 @@ exports.getSettings = async (req, res) => {
 // PUT /api/settings - Update one or more setting keys
 exports.updateSettings = async (req, res) => {
     try {
-        const { pipeSchemas, fittingSchemas, godowns, dataRetention } = req.body;
+        const { pipeSchemas, fittingSchemas, godowns, dataRetention, agencyProfile, securitySettings } = req.body;
         const updates = [];
 
         if (pipeSchemas !== undefined) {
@@ -90,23 +117,89 @@ exports.updateSettings = async (req, res) => {
                 req.headers['x-user-role'] || 'admin'
             );
         }
+        if (agencyProfile !== undefined) {
+            const sanitizedProfile = {
+                agencyName: String(agencyProfile.agencyName || '').trim(),
+                adminName: String(agencyProfile.adminName || '').trim(),
+                address: String(agencyProfile.address || '').trim(),
+                email: String(agencyProfile.email || '').trim(),
+                phone: String(agencyProfile.phone || '').trim()
+            };
+
+            updates.push(Settings.findOneAndUpdate(
+                { key: 'agencyProfile' },
+                { value: { ...DEFAULT_AGENCY_PROFILE, ...sanitizedProfile } },
+                { upsert: true, new: true }
+            ));
+
+            await logActivity(
+                'UPDATE_SETTINGS',
+                'Updated agency profile settings.',
+                req.headers['x-user-role'] || 'admin'
+            );
+        }
+        if (securitySettings !== undefined) {
+            const currentSecurity = await getSecuritySettingsValue();
+            const nextSecurity = { ...currentSecurity };
+
+            if (securitySettings.adminPassword) {
+                nextSecurity.adminPassword = String(securitySettings.adminPassword);
+            }
+            if (securitySettings.deleteIconPassword) {
+                nextSecurity.deleteIconPassword = String(securitySettings.deleteIconPassword);
+            }
+
+            updates.push(Settings.findOneAndUpdate(
+                { key: 'securitySettings' },
+                { value: nextSecurity },
+                { upsert: true, new: true }
+            ));
+
+            await logActivity(
+                'UPDATE_SETTINGS',
+                'Updated system password settings.',
+                req.headers['x-user-role'] || 'admin'
+            );
+        }
 
         await Promise.all(updates);
 
         // Return updated settings
-        const [pipeSchemaDoc, fittingSchemaDoc, godownsDoc, updatedDataRetentionDoc] = await Promise.all([
+        const [pipeSchemaDoc, fittingSchemaDoc, godownsDoc, updatedDataRetentionDoc, agencyProfileDoc, securitySettingsDoc] = await Promise.all([
             Settings.findOne({ key: 'pipeSchemas' }),
             Settings.findOne({ key: 'fittingSchemas' }),
             Settings.findOne({ key: 'godowns' }),
-            Settings.findOne({ key: 'dataRetention' })
+            Settings.findOne({ key: 'dataRetention' }),
+            Settings.findOne({ key: 'agencyProfile' }),
+            Settings.findOne({ key: 'securitySettings' })
         ]);
 
         res.json({
             pipeSchemas: pipeSchemaDoc ? pipeSchemaDoc.value : DEFAULT_PIPE_SCHEMAS,
             fittingSchemas: fittingSchemaDoc ? fittingSchemaDoc.value : DEFAULT_FITTING_SCHEMAS,
             godowns: godownsDoc ? godownsDoc.value : DEFAULT_GODOWNS,
-            dataRetention: updatedDataRetentionDoc ? updatedDataRetentionDoc.value : DEFAULT_DATA_RETENTION
+            dataRetention: updatedDataRetentionDoc ? updatedDataRetentionDoc.value : DEFAULT_DATA_RETENTION,
+            agencyProfile: { ...DEFAULT_AGENCY_PROFILE, ...(agencyProfileDoc ? agencyProfileDoc.value : {}) },
+            securitySettings: { ...DEFAULT_SECURITY_SETTINGS, ...(securitySettingsDoc ? securitySettingsDoc.value : {}) }
         });
+    } catch (err) {
+        res.status(500).json({ message: 'Server Error', error: err.message });
+    }
+};
+
+exports.verifyAdminPassword = async (req, res) => {
+    try {
+        const security = await getSecuritySettingsValue();
+        res.json({ valid: req.body.password === security.adminPassword });
+    } catch (err) {
+        res.status(500).json({ message: 'Server Error', error: err.message });
+    }
+};
+
+exports.verifyDeletePassword = async (req, res) => {
+    try {
+        const security = await getSecuritySettingsValue();
+        res.json({ valid: req.body.password === security.deleteIconPassword });
     } catch (err) {
         res.status(500).json({ message: 'Server Error', error: err.message });
     }

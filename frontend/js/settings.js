@@ -11,10 +11,80 @@ async function initSettingsView() {
         return;
     }
     
+    await loadAgencySettings();
     await loadRetentionSettings();
     await loadRetentionCount();
     await loadAuditLogs();
 }
+
+// Fetch agency profile and security settings
+async function loadAgencySettings() {
+    try {
+        const settings = await API.fetchSettings();
+        
+        // Populate Agency Profile
+        if (settings.agencyProfile) {
+            document.getElementById('agencyNameInput').value = settings.agencyProfile.agencyName || '';
+            document.getElementById('adminNameInput').value = settings.agencyProfile.adminName || '';
+            document.getElementById('agencyAddressInput').value = settings.agencyProfile.address || '';
+            document.getElementById('agencyEmailInput').value = settings.agencyProfile.email || '';
+            document.getElementById('agencyPhoneInput').value = settings.agencyPhoneInput || settings.agencyProfile.phone || '';
+            
+            // Fix phone input mapping
+            if (document.getElementById('agencyPhoneInput')) {
+                document.getElementById('agencyPhoneInput').value = settings.agencyProfile.phone || '';
+            }
+        }
+        
+        // Passwords are left blank for security, or we can show placeholder
+        document.getElementById('adminPasswordInput').value = '';
+        document.getElementById('deletePasswordInput').value = '';
+        
+    } catch (err) {
+        console.error("Error loading agency settings:", err);
+        showToast("Error loading agency settings", "error");
+    }
+}
+
+// Save Agency Profile and Security settings
+document.getElementById('agencySettingsForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const agencyProfile = {
+        agencyName: formData.get('agencyName'),
+        adminName: formData.get('adminName'),
+        address: formData.get('address'),
+        email: formData.get('email'),
+        phone: formData.get('phone')
+    };
+    
+    const securitySettings = {};
+    const adminPass = formData.get('adminPassword');
+    const deletePass = formData.get('deleteIconPassword');
+    
+    if (adminPass) securitySettings.adminPassword = adminPass;
+    if (deletePass) securitySettings.deleteIconPassword = deletePass;
+    
+    try {
+        const payload = { agencyProfile };
+        if (Object.keys(securitySettings).length > 0) {
+            payload.securitySettings = securitySettings;
+        }
+        
+        await API.saveSettings(payload);
+        showToast("Agency settings updated successfully", "success");
+        
+        // Clear password fields
+        document.getElementById('adminPasswordInput').value = '';
+        document.getElementById('deletePasswordInput').value = '';
+        
+        await loadAuditLogs();
+        
+    } catch (err) {
+        alert("Error saving agency settings: " + err.message);
+    }
+});
 
 // Fetch retention settings from the backend and populate the form fields
 async function loadRetentionSettings() {

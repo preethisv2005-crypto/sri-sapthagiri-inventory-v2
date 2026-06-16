@@ -3,6 +3,8 @@ const router = express.Router();
 const { 
     getSettings, 
     updateSettings, 
+    verifyAdminPassword,
+    verifyDeletePassword,
     getRetentionCount, 
     performManualCleanup, 
     getAuditLogs 
@@ -10,7 +12,9 @@ const {
 const { requireAdmin } = require('../middleware/auth');
 
 router.get('/', getSettings);
-router.put('/', updateSettings);
+router.put('/', requireAdmin, updateSettings);
+router.post('/verify-admin-password', verifyAdminPassword);
+router.post('/verify-delete-password', verifyDeletePassword);
 
 // Retention and audit log endpoints (require Admin)
 router.get('/retention-count', requireAdmin, getRetentionCount);

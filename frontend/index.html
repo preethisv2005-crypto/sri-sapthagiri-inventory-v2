@@ -202,8 +202,8 @@
                             FITTINGS</a>
                     </div>
                 </div>
-                <a href="#" class="nav-item admin-only" data-target="motorsView">
-                    <i class="fa-solid fa-cog"></i>
+                <a href="#" class="nav-item" data-target="motorsView">
+                    <i class="fa-solid fa-microchip"></i>
                     CRI (Motors)
                 </a>
                 <a href="#" class="nav-item" data-target="challansView"><i class="fa-solid fa-truck"></i> Transport
@@ -214,8 +214,10 @@
                         class="fa-solid fa-right-left"></i> Internal Transactions</a>
                 <a href="#" class="nav-item admin-only" data-target="reportsView"><i class="fa-solid fa-chart-line"></i>
                     Reports</a>
-                <a href="#" class="nav-item admin-only" data-target="settingsView"><i class="fa-solid fa-sliders"></i>
+                <a href="#" class="nav-item admin-only" data-target="dataRetentionView"><i class="fa-solid fa-clock-rotate-left"></i>
                     Data Retention</a>
+                <a href="#" class="nav-item admin-only" data-target="settingsView"><i class="fa-solid fa-gear"></i>
+                    Settings</a>
             </nav>
             <div class="user-profile">
                 <div class="user-profile-header">
@@ -719,12 +721,12 @@
                 </div>
             </section>
 
-            <!-- Settings View (Data Retention) -->
-            <section id="settingsView" class="view-section hidden">
+            <!-- Data Retention View -->
+            <section id="dataRetentionView" class="view-section hidden">
                 <header class="section-header">
                     <div>
-                        <h2>Data Retention & System Settings</h2>
-                        <p class="subtitle">Configure automated database cleanups, perform manual pruning, and monitor audit logs</p>
+                        <h2>Data Retention & System Cleanup</h2>
+                        <p class="subtitle">Configure automated database cleanups and monitor system audit logs</p>
                     </div>
                 </header>
 
@@ -794,7 +796,7 @@
                 </div>
 
                 <!-- Audit Logs Section -->
-                <div class="card table-card">
+                <div class="card table-card" style="margin-bottom: 2rem;">
                     <div class="card-header" style="border-bottom: 1px solid var(--border); padding: 1.25rem 1.5rem; display: flex; justify-content: space-between; align-items: center;">
                         <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-dark); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
                             <i class="fa-solid fa-clipboard-list" style="color: var(--primary);"></i> Audit Trail Logs
@@ -815,6 +817,64 @@
                                 <!-- Populated by JS -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section id="settingsView" class="view-section hidden">
+                <header class="section-header">
+                    <div>
+                        <h2>Agency Profile & Security</h2>
+                        <p class="subtitle">Manage agency contact details and administrative access passwords</p>
+                    </div>
+                </header>
+
+                <div class="stats-grid" style="grid-template-columns: 1fr; max-width: 800px; margin-bottom: 2rem;">
+                    <!-- Agency & Security Settings Card -->
+                    <div class="card" style="padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                        <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-dark); display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 0.5rem;">
+                            <i class="fa-solid fa-building-shield" style="color: var(--primary);"></i> Agency Information & Profile
+                        </h3>
+                        <form id="agencySettingsForm" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                            <div class="form-row" style="display: flex; gap: 1.5rem;">
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Agency Name</label>
+                                    <input type="text" id="agencyNameInput" name="agencyName" placeholder="Enter agency name..." style="width: 100%; padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Admin Name</label>
+                                    <input type="text" id="adminNameInput" name="adminName" placeholder="Admin username..." style="width: 100%; padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;">
+                                </div>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Address</label>
+                                <textarea id="agencyAddressInput" name="address" placeholder="Enter business address..." style="width: 100%; height: 80px; padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;"></textarea>
+                            </div>
+                            <div class="form-row" style="display: flex; gap: 1.5rem;">
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Email ID</label>
+                                    <input type="email" id="agencyEmailInput" name="email" placeholder="admin@example.com" style="width: 100%; padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Phone No.</label>
+                                    <input type="text" id="agencyPhoneInput" name="phone" placeholder="Contact number..." style="width: 100%; padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;">
+                                </div>
+                            </div>
+                            <div class="form-row" style="display: flex; gap: 1.5rem; border-top: 1px dashed var(--border); padding-top: 1.5rem; margin-top: 0.5rem;">
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Change Admin Password</label>
+                                    <input type="password" id="adminPasswordInput" name="adminPassword" style="width: 100%; padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;" placeholder="Enter new password...">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="display: block; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.5rem;">Change Delete Password</label>
+                                    <input type="password" id="deletePasswordInput" name="deleteIconPassword" style="width: 100%; padding: 0.85rem; border: 1px solid var(--border); border-radius: 10px;" placeholder="Enter new delete password...">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn-primary" style="align-self: flex-start; padding: 0.85rem 2rem; font-size: 1rem;">
+                                <i class="fa-regular fa-floppy-disk"></i> Update Profile & Passwords
+                            </button>
+                        </form>
                     </div>
                 </div>
             </section>

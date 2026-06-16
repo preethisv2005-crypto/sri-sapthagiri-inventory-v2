@@ -220,12 +220,30 @@ async function doLogin(username, role) {
     initApp();
 }
 
-btnAdminConfirm.addEventListener('click', () => {
+btnAdminConfirm.addEventListener('click', async () => {
     const pass = adminPasswordInput.value;
-    if (pass === '12345678') {
-        doLogin('admin', 'admin');
-    } else {
+    
+    // Add loading state to button
+    const originalText = btnAdminConfirm.innerHTML;
+    btnAdminConfirm.disabled = true;
+    btnAdminConfirm.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...';
+    adminLoginError.style.display = 'none';
+
+    try {
+        const result = await API.verifyAdminPassword(pass);
+        if (result.valid) {
+            doLogin('admin', 'admin');
+        } else {
+            adminLoginError.style.display = 'block';
+            adminLoginError.textContent = '❌ Incorrect admin password.';
+        }
+    } catch (err) {
+        console.error('Login error:', err);
         adminLoginError.style.display = 'block';
+        adminLoginError.textContent = '❌ Server error. Please check connection.';
+    } finally {
+        btnAdminConfirm.disabled = false;
+        btnAdminConfirm.innerHTML = originalText;
     }
 });
 
@@ -317,7 +335,7 @@ document.querySelectorAll('.nav-item').forEach(link => {
             openNewChallanModal(true);
             return;
         }
-        if (target === 'settingsView') {
+        if (target === 'settingsView' || target === 'dataRetentionView') {
             if (typeof initSettingsView === 'function') {
                 initSettingsView();
             }

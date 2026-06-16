@@ -80,20 +80,26 @@ function switchView(viewId) {
  * @param {Function} callback - The function to run if password is correct.
  * @param {string} message - Optional confirmation message.
  */
-window.confirmDeletion = function(callback, message = "Are you sure you want to delete this?") {
+window.confirmDeletion = async function(callback, message = "Are you sure you want to delete this?") {
     // First, show the standard confirmation dialog
+    // Since window.alert is overridden, window.confirm remains native or uses its own behavior.
     if (!confirm(message)) return;
 
     // Then, ask for the deletion password
     const pwd = prompt("Enter Deletion Password to proceed:");
     
-    // Default deletion password is '1234'
-    const DELETION_PASSWORD = '1234'; 
+    if (pwd === null) return; // User clicked Cancel
 
-    if (pwd === DELETION_PASSWORD) {
-        callback();
-    } else if (pwd !== null) {
-        alert("Incorrect Deletion Password. Action cancelled.");
+    try {
+        const result = await API.verifyDeletePassword(pwd);
+        if (result.valid) {
+            callback();
+        } else {
+            alert("Incorrect Deletion Password. Action cancelled.");
+        }
+    } catch (err) {
+        console.error("Verification error:", err);
+        alert("Server error during verification. Please try again.");
     }
 };
 

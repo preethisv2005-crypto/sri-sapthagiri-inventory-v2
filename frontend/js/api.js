@@ -232,6 +232,14 @@ async function saveSettings(settings) {
     return apiCall('PUT', '/settings', settings);
 }
 
+async function verifyAdminPassword(password) {
+    return apiCall('POST', '/settings/verify-admin-password', { password }, 0);
+}
+
+async function verifyDeletePassword(password) {
+    return apiCall('POST', '/settings/verify-delete-password', { password }, 0);
+}
+
 // ─── Pipes ────────────────────────────────────────────────────────────────────
 
 async function fetchPipes() {
@@ -331,7 +339,7 @@ async function fetchAuditLogs() {
 window.API = {
     checkServerHealth, wakeServer,
     startKeepAlive, stopKeepAlive,
-    fetchSettings, saveSettings,
+    fetchSettings, saveSettings, verifyAdminPassword, verifyDeletePassword,
     fetchRetentionCount, triggerManualCleanup, fetchAuditLogs,
     fetchPipes, createPipe, updatePipe, deletePipeApi,
     fetchFittings, createFitting, updateFitting, deleteFittingApi,

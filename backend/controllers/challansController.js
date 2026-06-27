@@ -245,6 +245,13 @@ async function parseItemString(itemStr) {
     return null;
 }
 
+function getMatchRegex(str) {
+    if (!str) return /^$/;
+    const escaped = str.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = '^' + escaped.replace(/\s+/g, '\\s+') + '$';
+    return new RegExp(pattern, 'i');
+}
+
 function parseMotorItemString(itemStr) {
     if (itemStr.includes(' HP Motor - ') && itemStr.includes('(') && itemStr.includes(')')) {
         const parts = itemStr.split(' HP Motor - ');
@@ -265,9 +272,9 @@ function parseMotorItemString(itemStr) {
 
 async function checkMotorSerials(hp, type, phase, godown, serialsArray) {
     const motor = await Motor.findOne({
-        type: { $regex: new RegExp("^" + type + "$", "i") },
-        hp: { $regex: new RegExp("^" + hp + "$", "i") },
-        phase: { $regex: new RegExp("^" + phase + "$", "i") }
+        type: { $regex: getMatchRegex(type) },
+        hp: { $regex: getMatchRegex(hp) },
+        phase: { $regex: getMatchRegex(phase) }
     });
     if (!motor) return { valid: false, message: `Motor ${type} ${hp} HP not found` };
 
@@ -425,9 +432,9 @@ const adjustStock = async (challan, direction) => {
         if (motorParsed) {
             const { hp, type, phase } = motorParsed;
             const motor = await Motor.findOne({
-                type: { $regex: new RegExp("^" + type + "$", "i") },
-                hp: { $regex: new RegExp("^" + hp + "$", "i") },
-                phase: { $regex: new RegExp("^" + phase + "$", "i") }
+                type: { $regex: getMatchRegex(type) },
+                hp: { $regex: getMatchRegex(hp) },
+                phase: { $regex: getMatchRegex(phase) }
             });
             if (motor) {
                 if (challan.type === 'Outward') {
